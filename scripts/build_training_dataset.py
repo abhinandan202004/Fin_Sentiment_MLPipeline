@@ -16,7 +16,7 @@ from database.models import TrainingFeature, MarketData
 from ingestion.market.yfinance_ingestor import YFinanceIngestor
 from ingestion.news import fetch_and_store_news
 from nlp.sentiment import score_unscored_articles
-from features.technical import compute_all_technical_features, fetch_spy_regime
+from features.technical import compute_all_technical_features, fetch_market_regime, fetch_spy_regime
 from features.sentiment_features import compute_daily_sentiment_features
 from notebooks.eda import run_eda
 from models.baseline_model import train_logistic_regression_baseline
@@ -51,7 +51,11 @@ TRAINING_COLUMNS = [
     "return_5d",
     "return_20d",
     "volume_ratio",
+    "spy_return_1d",
     "spy_return_5d",
+    "spy_volatility",
+    "vix_level",
+    "sector_return_5d",
     "future_return_1d",
     "future_return_5d",
     "future_return_10d",
@@ -128,9 +132,9 @@ def build_training_dataset(
         db.close()
 
     # Step 6: Compute Technical Features & Market Regime
-    logger.info("Step 6/10: Computing technical indicators (RSI, MACD, EMAs, BB, ATR, SPY regime)...")
-    spy_df = fetch_spy_regime(period=period)
-    df_technical = compute_all_technical_features(df_market, spy_df=spy_df)
+    logger.info("Step 6/10: Computing technical indicators (RSI, MACD, EMAs, BB, ATR, SPY regime, VIX)...")
+    regime_df = fetch_market_regime(period=period)
+    df_technical = compute_all_technical_features(df_market, regime_df=regime_df)
 
     # Step 7: Compute Daily Sentiment Features
     logger.info("Step 7/10: Aggregating daily sentiment features (counts, EMA3, EMA7, delta)...")
@@ -158,7 +162,8 @@ def build_training_dataset(
     # Ensure all technical columns are valid numbers
     tech_cols = ["rsi", "macd", "macd_signal", "macd_diff", "ema20", "ema50",
                  "bollinger_high", "bollinger_low", "bollinger_pband", "atr",
-                 "return_1d", "return_5d", "return_20d", "volume_ratio", "spy_return_5d"]
+                 "return_1d", "return_5d", "return_20d", "volume_ratio",
+                 "spy_return_1d", "spy_return_5d", "spy_volatility", "vix_level", "sector_return_5d"]
     for c in tech_cols:
         df_master[c] = pd.to_numeric(df_master[c], errors="coerce")
 
@@ -225,7 +230,11 @@ def build_training_dataset(
                     return_5d=float(row["return_5d"]) if pd.notna(row["return_5d"]) else None,
                     return_20d=float(row["return_20d"]) if pd.notna(row["return_20d"]) else None,
                     volume_ratio=float(row["volume_ratio"]) if pd.notna(row["volume_ratio"]) else None,
+                    spy_return_1d=float(row["spy_return_1d"]) if pd.notna(row.get("spy_return_1d")) else None,
                     spy_return_5d=float(row["spy_return_5d"]) if pd.notna(row["spy_return_5d"]) else None,
+                    spy_volatility=float(row["spy_volatility"]) if pd.notna(row.get("spy_volatility")) else None,
+                    vix_level=float(row["vix_level"]) if pd.notna(row.get("vix_level")) else None,
+                    sector_return_5d=float(row["sector_return_5d"]) if pd.notna(row.get("sector_return_5d")) else None,
                     future_return_1d=float(row["future_return_1d"]) if pd.notna(row["future_return_1d"]) else None,
                     future_return_5d=float(row["future_return_5d"]) if pd.notna(row["future_return_5d"]) else None,
                     future_return_10d=float(row["future_return_10d"]) if pd.notna(row["future_return_10d"]) else None,

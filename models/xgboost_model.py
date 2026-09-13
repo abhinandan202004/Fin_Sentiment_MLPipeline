@@ -29,6 +29,47 @@ MODEL_PATH = ARTIFACTS_DIR / "xgboost_v1.json"
 META_PATH = ARTIFACTS_DIR / "xgboost_v1_meta.joblib"
 
 
+def train_xgboost(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    params: Dict[str, Any] = None,
+) -> Tuple[xgb.XGBClassifier, np.ndarray, np.ndarray]:
+    """
+    Trains an XGBoost classifier with custom or default parameters.
+    """
+    neg_count = (y_train == 0).sum()
+    pos_count = (y_train == 1).sum()
+    scale_pos_weight = (neg_count / (pos_count + 1e-5)) if pos_count > 0 else 1.0
+
+    default_params = {
+        "n_estimators": 300,
+        "max_depth": 6,
+        "learning_rate": 0.05,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "scale_pos_weight": scale_pos_weight,
+        "eval_metric": "logloss",
+        "random_state": 42,
+    }
+    if params:
+        default_params.update(params)
+
+    model = xgb.XGBClassifier(**default_params)
+    model.fit(
+        X_train,
+        y_train,
+        eval_set=[(X_train, y_train), (X_test, y_test)],
+        verbose=False,
+    )
+
+    y_pred = model.predict(X_test)
+    y_prob = model.predict_proba(X_test)[:, 1]
+
+    return model, y_pred, y_prob
+
+
 def train_xgboost_pipeline(
     df: pd.DataFrame,
     features: list = None,

@@ -158,7 +158,11 @@ class TrainingFeature(Base):
     volume_ratio = Column(Float, nullable=True)
 
     # Market Regime
+    spy_return_1d = Column(Float, nullable=True)
     spy_return_5d = Column(Float, nullable=True)
+    spy_volatility = Column(Float, nullable=True)
+    vix_level = Column(Float, nullable=True)
+    sector_return_5d = Column(Float, nullable=True)
 
     # Forward Targets
     future_return_1d = Column(Float, nullable=True)

@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import logging
 from typing import Dict, Any, List
 import numpy as np
@@ -107,12 +111,47 @@ def run_backtest(
     test_df: pd.DataFrame,
     threshold: float = 0.50,
 ) -> Dict[str, Any]:
-    """Runs backtest across 1-day, 5-day, and 10-day horizons."""
+    """Runs backtest across 1-day, 5-day, and 10-day forward return horizons."""
     engine = BacktestEngine()
     results = {}
-    for horizon in ["return_1d", "return_5d", "return_10d"]:
+    horizons = ["future_return_1d", "future_return_5d", "future_return_10d"]
+    for horizon in horizons:
         if horizon in test_df.columns:
             results[horizon] = engine.evaluate_strategy(
                 test_df, confidence_threshold=threshold, holding_horizon=horizon
             )
     return results
+
+
+if __name__ == "__main__":
+    import json
+    import joblib
+    from config import ARTIFACTS_DIR, DATA_DIR
+    from models.feature_store import load_feature_dataset, temporal_train_test_split
+
+    df = load_feature_dataset()
+    X_train, y_train, X_test, y_test, train_df, test_df = temporal_train_test_split(df)
+
+    model = joblib.load(ARTIFACTS_DIR / "best_model.pkl")
+    probs = model.predict_proba(X_test)[:, 1]
+    test_df["confidence"] = probs
+
+    print("\n" + "=" * 70)
+    print(" SPRINT 3 QUANTITATIVE BACKTESTING ENGINE")
+    print("=" * 70)
+
+    for thresh in [0.50, 0.52, 0.55]:
+        print(f"\n--- Backtest Strategy (Confidence Threshold >= {thresh:.2f}) ---")
+        res = run_backtest(test_df, threshold=thresh)
+        for h, m in res.items():
+            if "win_rate" in m:
+                print(
+                    f"  [{h:<18}] Trades: {m['total_trades']:3d} | "
+                    f"Win Rate: {m['win_rate']:5.2f}% | "
+                    f"Avg Return: {m['average_return_per_trade']:+5.2f}% | "
+                    f"Sharpe: {m['sharpe_ratio']:5.2f} | "
+                    f"Max DD: {m['max_drawdown']:6.2f}%"
+                )
+            else:
+                print(f"  [{h:<18}] {m.get('message')}")
+    print("=" * 70 + "\n")

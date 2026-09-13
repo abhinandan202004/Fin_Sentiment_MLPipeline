@@ -16,8 +16,7 @@ data/*.sqlite
 data/*.sqlite3
 data/cache/
 
-# Model & Artifact caches
-models/artifacts/*.json
+# Model & Artifact caches (ignore large binary weights)
 models/artifacts/*.joblib
 models/artifacts/*.pkl
 .cache/

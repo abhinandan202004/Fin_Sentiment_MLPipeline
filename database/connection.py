@@ -38,7 +38,14 @@ def get_db():
         db.close()
 
 def init_db():
-    """Initializes tables if they do not exist."""
+    """Initializes tables if they do not exist, ensuring updated schema."""
+    from sqlalchemy import inspect
     import database.models  # Ensure models are imported before creating tables
+    inspector = inspect(engine)
+    if "training_features" in inspector.get_table_names():
+        existing_cols = {col["name"] for col in inspector.get_columns("training_features")}
+        if "spy_return_1d" not in existing_cols or "vix_level" not in existing_cols:
+            logger.info("Migrating training_features table schema (dropping legacy table)...")
+            database.models.TrainingFeature.__table__.drop(bind=engine, checkfirst=True)
     Base.metadata.create_all(bind=engine)
     logger.info("Database schema verified and tables initialized.")

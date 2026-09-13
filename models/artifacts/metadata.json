@@ -1,0 +1,11 @@
+{
+  "model": "Random Forest",
+  "base_model": "Random Forest",
+  "accuracy": 0.4765,
+  "directional_accuracy": 0.4765,
+  "roc_auc": 0.5163,
+  "hit_rate": 0.4773,
+  "sharpe_ratio": -0.44,
+  "best_params": "default",
+  "trained_at": "2026-09-13T20:40:17.625431+00:00"
+}

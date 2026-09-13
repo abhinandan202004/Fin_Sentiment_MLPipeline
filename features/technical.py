@@ -65,29 +65,59 @@ def compute_ticker_technical_indicators(df_ticker: pd.DataFrame) -> pd.DataFrame
     return df
 
 
-def fetch_spy_regime(period: str = "2y") -> pd.DataFrame:
-    """Fetches SPY ETF to calculate market regime indicator: spy_return_5d."""
-    logger.info("Fetching SPY benchmark for market regime feature...")
+def fetch_market_regime(period: str = "2y") -> pd.DataFrame:
+    """
+    Fetches S&P 500 benchmark (SPY) and CBOE Volatility Index (^VIX)
+    to calculate market regime features:
+      - spy_return_1d
+      - spy_return_5d
+      - spy_volatility (20-day annualized rolling std)
+      - vix_level
+    """
+    logger.info("Fetching SPY and ^VIX for market regime features...")
     try:
-        spy = yf.Ticker("SPY")
-        df_spy = spy.history(period=period, interval="1d")
-        if df_spy.empty:
+        spy = yf.Ticker("SPY").history(period=period, interval="1d")
+        vix = yf.Ticker("^VIX").history(period=period, interval="1d")
+
+        if spy.empty:
             return pd.DataFrame()
-        df_spy = df_spy.dropna(subset=["Close"]).copy()
-        df_spy["date"] = pd.to_datetime(df_spy.index).date
-        df_spy["spy_return_5d"] = (df_spy["Close"] - df_spy["Close"].shift(5)) / df_spy["Close"].shift(5)
-        return df_spy[["date", "spy_return_5d"]].dropna()
+
+        spy = spy.dropna(subset=["Close"]).copy()
+        spy_close = spy["Close"]
+        spy["date"] = pd.to_datetime(spy.index).date
+        spy["spy_return_1d"] = (spy_close - spy_close.shift(1)) / spy_close.shift(1)
+        spy["spy_return_5d"] = (spy_close - spy_close.shift(5)) / spy_close.shift(5)
+        log_ret = np.log(spy_close / spy_close.shift(1))
+        spy["spy_volatility"] = log_ret.rolling(20, min_periods=5).std() * np.sqrt(252)
+
+        regime_df = spy[["date", "spy_return_1d", "spy_return_5d", "spy_volatility"]].copy()
+
+        if not vix.empty:
+            vix = vix.dropna(subset=["Close"]).copy()
+            vix["date"] = pd.to_datetime(vix.index).date
+            vix["vix_level"] = vix["Close"]
+            regime_df = pd.merge(regime_df, vix[["date", "vix_level"]], on="date", how="left")
+            regime_df["vix_level"] = regime_df["vix_level"].ffill().bfill().fillna(20.0)
+        else:
+            regime_df["vix_level"] = 20.0
+
+        return regime_df.dropna(subset=["spy_return_5d"])
     except Exception as e:
-        logger.warning(f"Failed to fetch SPY regime: {e}")
+        logger.warning(f"Failed to fetch market regime: {e}")
         return pd.DataFrame()
+
+
+# Alias for backward compatibility
+fetch_spy_regime = fetch_market_regime
 
 
 def compute_all_technical_features(
     df_market: pd.DataFrame,
-    spy_df: Optional[pd.DataFrame] = None,
+    regime_df: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
-    Computes technical indicators for each ticker in df_market and joins SPY 5-day market return.
+    Computes technical indicators for each ticker in df_market and joins market regime features.
+    Also computes sector_return_5d as cross-sectional average return across tickers in same sector.
     """
     if df_market.empty:
         return pd.DataFrame()
@@ -101,15 +131,29 @@ def compute_all_technical_features(
     combined = pd.concat(results, ignore_index=True)
     combined["date"] = pd.to_datetime(combined["date"]).dt.date
 
-    # Join SPY regime feature
-    if spy_df is not None and not spy_df.empty:
-        spy_clean = spy_df.copy()
-        spy_clean["date"] = pd.to_datetime(spy_clean["date"]).dt.date
-        combined = pd.merge(combined, spy_clean[["date", "spy_return_5d"]], on="date", how="left")
+    # Join Market Regime features (SPY returns, SPY volatility, VIX)
+    if regime_df is not None and not regime_df.empty:
+        reg_clean = regime_df.copy()
+        reg_clean["date"] = pd.to_datetime(reg_clean["date"]).dt.date
+        cols_to_join = ["date", "spy_return_1d", "spy_return_5d", "spy_volatility", "vix_level"]
+        available_cols = [c for c in cols_to_join if c in reg_clean.columns]
+        combined = pd.merge(combined, reg_clean[available_cols], on="date", how="left")
     else:
+        combined["spy_return_1d"] = 0.0
         combined["spy_return_5d"] = 0.0
+        combined["spy_volatility"] = 0.15
+        combined["vix_level"] = 20.0
 
-    # Fill any missing SPY returns with 0.0
+    # Fill any missing regime values with reasonable baseline defaults
+    combined["spy_return_1d"] = combined["spy_return_1d"].fillna(0.0)
     combined["spy_return_5d"] = combined["spy_return_5d"].fillna(0.0)
+    combined["spy_volatility"] = combined["spy_volatility"].fillna(0.15)
+    combined["vix_level"] = combined["vix_level"].fillna(20.0)
+
+    # Compute sector_return_5d: cross-sectional mean of 5-day return across tickers per date
+    daily_cross_sec = combined.groupby("date")["return_5d"].mean().reset_index()
+    daily_cross_sec.rename(columns={"return_5d": "sector_return_5d"}, inplace=True)
+    combined = pd.merge(combined, daily_cross_sec, on="date", how="left")
+    combined["sector_return_5d"] = combined["sector_return_5d"].fillna(0.0)
 
     return combined
