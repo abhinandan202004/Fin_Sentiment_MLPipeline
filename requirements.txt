@@ -9,6 +9,7 @@ numpy>=1.26.0
 
 # Market Data & News Ingestion
 yfinance>=0.2.38
+ta>=0.11.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 feedparser>=6.0.10

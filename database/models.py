@@ -117,3 +117,62 @@ class Prediction(Base):
 
     def __repr__(self):
         return f"<Prediction {self.ticker}: {self.prediction} ({self.confidence:.2f})>"
+
+
+class TrainingFeature(Base):
+    __tablename__ = "training_features"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    ticker = Column(String(20), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)
+
+    # Sentiment Features
+    avg_sentiment = Column(Float, nullable=False, default=0.0)
+    sentiment_ema_3 = Column(Float, nullable=False, default=0.0)
+    sentiment_ema_7 = Column(Float, nullable=False, default=0.0)
+    sentiment_delta = Column(Float, nullable=False, default=0.0)
+    positive_article_count = Column(BigInteger, nullable=False, default=0)
+    negative_article_count = Column(BigInteger, nullable=False, default=0)
+    total_article_count = Column(BigInteger, nullable=False, default=0)
+
+    # Momentum
+    rsi = Column(Float, nullable=True)
+
+    # Trend
+    macd = Column(Float, nullable=True)
+    macd_signal = Column(Float, nullable=True)
+    macd_diff = Column(Float, nullable=True)
+    ema20 = Column(Float, nullable=True)
+    ema50 = Column(Float, nullable=True)
+
+    # Volatility
+    bollinger_high = Column(Float, nullable=True)
+    bollinger_low = Column(Float, nullable=True)
+    bollinger_pband = Column(Float, nullable=True)
+    atr = Column(Float, nullable=True)
+
+    # Price Momentum & Volume
+    return_1d = Column(Float, nullable=True)
+    return_5d = Column(Float, nullable=True)
+    return_20d = Column(Float, nullable=True)
+    volume_ratio = Column(Float, nullable=True)
+
+    # Market Regime
+    spy_return_5d = Column(Float, nullable=True)
+
+    # Forward Targets
+    future_return_1d = Column(Float, nullable=True)
+    future_return_5d = Column(Float, nullable=True)
+    future_return_10d = Column(Float, nullable=True)
+    target = Column(BigInteger, nullable=False)  # 1 if future_return_5d > 0 else 0
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("ticker", "date", name="uq_training_ticker_date"),
+        Index("idx_training_ticker_date", "ticker", "date"),
+    )
+
+    def __repr__(self):
+        return f"<TrainingFeature {self.ticker} {self.date} Target={self.target}>"
+
