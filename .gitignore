@@ -1,0 +1,27 @@
+# Virtual environment
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# Data & SQLite local cache
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/cache/
+
+# Model & Artifact caches
+models/artifacts/*.json
+models/artifacts/*.joblib
+models/artifacts/*.pkl
+.cache/
+
+# IDE
+.vscode/
+.idea/
