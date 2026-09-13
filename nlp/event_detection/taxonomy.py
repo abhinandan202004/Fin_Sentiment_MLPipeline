@@ -1,0 +1,132 @@
+from typing import List, Dict, Any
+import re
+
+EVENT_TYPES: List[str] = [
+    "earnings_beat",
+    "earnings_miss",
+    "analyst_upgrade",
+    "analyst_downgrade",
+    "product_launch",
+    "acquisition",
+    "merger",
+    "regulation",
+    "lawsuit",
+    "interest_rate_change",
+    "geopolitical_conflict",
+    "supply_chain_issue",
+    "layoffs",
+]
+
+EVENT_WEIGHTS: Dict[str, float] = {
+    "earnings_beat": 0.8,
+    "earnings_miss": -0.8,
+    "analyst_upgrade": 0.6,
+    "analyst_downgrade": -0.6,
+    "product_launch": 0.5,
+    "acquisition": 0.4,
+    "merger": 0.3,
+    "regulation": -0.4,
+    "lawsuit": -0.5,
+    "interest_rate_change": -0.3,
+    "geopolitical_conflict": -0.7,
+    "supply_chain_issue": -0.6,
+    "layoffs": -0.3,
+}
+
+# Regex and keyword semantic dictionaries for high-precision matching
+EVENT_PATTERNS: Dict[str, List[str]] = {
+    "earnings_beat": [
+        r"\bbeats?\s+(earnings|estimates|expectations|revenue)\b",
+        r"\brecord\s+(revenue|profit|earnings|quarter)\b",
+        r"\braises?\s+(guidance|outlook|forecast)\b",
+        r"\bstrong\s+(quarter|q[1-4]|earnings|results)\b",
+        r"\btop-line\s+growth\b",
+        r"\bprofit\s+surges?\b",
+    ],
+    "earnings_miss": [
+        r"\bmisses?\s+(earnings|estimates|expectations|revenue)\b",
+        r"\blowers?\s+(guidance|outlook|forecast)\b",
+        r"\bprofit\s+drops?\b",
+        r"\bdisappointing\s+(quarter|earnings|revenue)\b",
+        r"\brevenue\s+falls?\b",
+        r"\bmargin\s+compression\b",
+    ],
+    "analyst_upgrade": [
+        r"\bupgrades?\s+(to\s+)?(buy|outperform|overweight|strong buy)\b",
+        r"\braises?\s+price\s+target\b",
+        r"\bprice\s+target\s+(raised|hiked|boosted)\b",
+        r"\bbullish\s+analyst\b",
+        r"\binitiates?\s+with\s+(buy|outperform)\b",
+    ],
+    "analyst_downgrade": [
+        r"\bdowngrades?\s+(to\s+)?(sell|neutral|underperform|hold)\b",
+        r"\blowers?\s+price\s+target\b",
+        r"\bprice\s+target\s+(cut|slashed|lowered)\b",
+        r"\bbearish\s+call\b",
+    ],
+    "product_launch": [
+        r"\bunveils?\s+(next-generation|new|ai|chip|model|architecture)\b",
+        r"\blaunches?\s+(new|next-gen|platform|processor|service)\b",
+        r"\bannounces?\s+new\b",
+        r"\breleases?\s+(new|updated|blackwell|gpu|software)\b",
+        r"\bshowcases?\s+new\b",
+    ],
+    "acquisition": [
+        r"\bacquires?\b",
+        r"\bacquisition\s+of\b",
+        r"\bbuyout\s+of\b",
+        r"\btakeover\s+bid\b",
+        r"\bpurchases?\s+(startup|business|division)\b",
+    ],
+    "merger": [
+        r"\bmerges?\s+with\b",
+        r"\bmerger\s+agreement\b",
+        r"\bcombines?\s+operations\b",
+    ],
+    "regulation": [
+        r"\bregulatory\s+(scrutiny|probe|approval|inquiry|hurdle)\b",
+        r"\bantitrust\s+(investigation|lawsuit|action|scrutiny)\b",
+        r"\bftc\s+(probe|inquiry|blocks)\b",
+        r"\bsec\s+(investigation|probe|charges)\b",
+        r"\bexport\s+(restrictions?|controls?|ban)\b",
+    ],
+    "lawsuit": [
+        r"\blawsuit\b",
+        r"\bsues?\b",
+        r"\blitigation\b",
+        r"\bpatent\s+infringement\b",
+        r"\blegal\s+battle\b",
+        r"\bclass-action\b",
+    ],
+    "interest_rate_change": [
+        r"\b(fed|federal reserve)\s+(raises|hikes|cuts|lowers|pauses)\b",
+        r"\binterest\s+rates?\b",
+        r"\bcentral\s+bank\s+(hikes|cuts|policy)\b",
+        r"\btreasury\s+yields?\b",
+        r"\bbasis\s+points?\b",
+    ],
+    "geopolitical_conflict": [
+        r"\bwar\b",
+        r"\bconflict\b",
+        r"\bgeopolitical\s+tensions?\b",
+        r"\bsanctions?\b",
+        r"\btaiwan\s+strait\b",
+        r"\bmiddle\s+east\b",
+        r"\bmilitary\s+strike\b",
+    ],
+    "supply_chain_issue": [
+        r"\bsupply\s+chain\s+(bottlenecks?|disruptions?|delays?|shortage)\b",
+        r"\bcomponent\s+shortages?\b",
+        r"\bwafer\s+shortage\b",
+        r"\bfoundry\s+delays?\b",
+        r"\bpackaging\s+bottlenecks?\b",
+    ],
+    "layoffs": [
+        r"\blayoffs?\b",
+        r"\blays?\s+off\b",
+        r"\bjob\s+cuts?\b",
+        r"\breduces?\s+workforce\b",
+        r"\bworkforce\s+reduction\b",
+        r"\bheadcount\s+reduction\b",
+    ],
+}

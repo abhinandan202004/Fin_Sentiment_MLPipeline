@@ -41,3 +41,8 @@ TRAIN_TEST_SPLIT_RATIO = float(os.getenv("TRAIN_TEST_SPLIT_RATIO", "0.8"))
 XGB_N_ESTIMATORS = int(os.getenv("XGB_N_ESTIMATORS", "100"))
 XGB_LEARNING_RATE = float(os.getenv("XGB_LEARNING_RATE", "0.05"))
 XGB_MAX_DEPTH = int(os.getenv("XGB_MAX_DEPTH", "4"))
+
+# Neo4j Settings
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")

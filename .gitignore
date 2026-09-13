@@ -19,6 +19,7 @@ data/cache/
 # Model & Artifact caches (ignore large binary weights)
 models/artifacts/*.joblib
 models/artifacts/*.pkl
+models/artifacts/*.index
 .cache/
 
 # IDE
