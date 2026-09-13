@@ -180,3 +180,34 @@ class TrainingFeature(Base):
     def __repr__(self):
         return f"<TrainingFeature {self.ticker} {self.date} Target={self.target}>"
 
+
+class PortfolioHistory(Base):
+    __tablename__ = "portfolio_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    total_capital = Column(Float, nullable=False)
+    cash_weight = Column(Float, nullable=False, default=0.10)
+    positions_json = Column(JSON, nullable=False)  # {"NVDA": 0.18, "AAPL": 0.15, ...}
+
+    def __repr__(self):
+        return f"<PortfolioHistory {self.timestamp} Capital={self.total_capital}>"
+
+
+class DecisionHistory(Base):
+    __tablename__ = "decision_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    action = Column(String(20), nullable=False)  # BUY, SELL, HOLD, REDUCE
+    target_weight = Column(Float, nullable=False)
+    delta_weight = Column(Float, nullable=False)
+    confidence = Column(Float, nullable=False)
+    expected_return = Column(Float, nullable=True)
+    realized_return = Column(Float, nullable=True)
+    rationale_json = Column(JSON, nullable=True)  # ["reason 1", "reason 2", ...]
+
+    def __repr__(self):
+        return f"<DecisionHistory {self.ticker}: {self.action} ({self.target_weight:.2%})>"
+

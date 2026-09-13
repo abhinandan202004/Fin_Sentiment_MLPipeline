@@ -1,6 +1,6 @@
 # Equity Research Note: NVDA
 
-**Generated**: 2026-09-13 21:06 UTC  
+**Generated**: 2026-09-13 21:09 UTC  
 **Primary Stance**: **NOT BUY** (Model Confidence: **56%**)  
 **Risk Level**: **MEDIUM** (Score: `0.40`)
 

@@ -6,9 +6,11 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 ARTIFACTS_DIR = BASE_DIR / "models" / "artifacts"
+REPORTS_DIR = BASE_DIR / "reports"
 
 DATA_DIR.mkdir(exist_ok=True)
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Load environment variables
 load_dotenv(BASE_DIR / ".env")
