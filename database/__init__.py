@@ -1,5 +1,16 @@
 from .connection import Base, engine, SessionLocal, get_db, init_db
-from .models import Company, Article, Event, MarketData, Prediction, TrainingFeature
+from .models import (
+    Company,
+    Article,
+    Event,
+    MarketData,
+    Prediction,
+    TrainingFeature,
+    PortfolioHistory,
+    DecisionHistory,
+    CommitteeDecision,
+    CommitteeVote,
+)
 
 __all__ = [
     "Base",
@@ -13,4 +24,8 @@ __all__ = [
     "MarketData",
     "Prediction",
     "TrainingFeature",
+    "PortfolioHistory",
+    "DecisionHistory",
+    "CommitteeDecision",
+    "CommitteeVote",
 ]

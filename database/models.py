@@ -9,6 +9,8 @@ from sqlalchemy import (
     DateTime,
     Date,
     JSON,
+    Boolean,
+    ForeignKey,
     UniqueConstraint,
     Index,
 )
@@ -210,4 +212,54 @@ class DecisionHistory(Base):
 
     def __repr__(self):
         return f"<DecisionHistory {self.ticker}: {self.action} ({self.target_weight:.2%})>"
+
+
+class CommitteeDecision(Base):
+    __tablename__ = "committee_decisions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    decision_date = Column(Date, default=lambda: datetime.now(timezone.utc).date())
+    prediction_date = Column(Date, default=lambda: datetime.now(timezone.utc).date())
+    outcome_date = Column(Date, nullable=True)
+
+    ticker = Column(String(20), nullable=False, index=True)
+    decision = Column(String(20), nullable=False)  # STRONG BUY, BUY, WATCHLIST, HOLD, REDUCE, SELL, REJECTED
+    confidence = Column(Float, nullable=False)
+    consensus_score = Column(Float, nullable=False, default=0.0)
+    allocation = Column(Float, nullable=False, default=0.0)
+
+    bull_score = Column(Float, nullable=False, default=0.0)
+    bear_score = Column(Float, nullable=False, default=0.0)
+    risk_score = Column(Float, nullable=False, default=0.0)
+    evidence_score = Column(Float, nullable=False, default=0.0)
+    final_score = Column(Float, nullable=False, default=0.0)
+
+    evidence_quality = Column(String(20), nullable=False, default="MEDIUM")
+    governance_passed = Column(Boolean, nullable=False, default=True)
+    cio_rationale = Column(Text, nullable=True)
+
+    expected_return = Column(Float, nullable=True)
+    realized_return = Column(Float, nullable=True)
+    correct_direction = Column(Boolean, nullable=True)
+
+    def __repr__(self):
+        return f"<CommitteeDecision {self.ticker}: {self.decision} (Alloc={self.allocation:.2%}, Conf={self.confidence:.2f})>"
+
+
+class CommitteeVote(Base):
+    __tablename__ = "committee_votes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    decision_id = Column(String(36), ForeignKey("committee_decisions.id"), nullable=False, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    agent_name = Column(String(50), nullable=False)  # BullAnalyst, BearAnalyst, RiskOfficer, EvidenceProsecutor, PortfolioManager
+    stance = Column(String(20), nullable=False)
+    confidence = Column(Float, nullable=False, default=0.5)
+    arguments_json = Column(JSON, nullable=True)
+    is_accurate = Column(Boolean, nullable=True)
+
+    def __repr__(self):
+        return f"<CommitteeVote {self.agent_name} for {self.ticker}: {self.stance} ({self.confidence:.2f})>"
 
