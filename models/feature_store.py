@@ -6,6 +6,9 @@ import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
 from config import DATA_DIR
 
+# Sprint 7: Import engineered feature list (imported lazily inside functions
+# to avoid circular imports during dataset build).
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("FeatureStore")
 
@@ -15,6 +18,8 @@ SENTIMENT_FEATURES = [
     "sentiment_ema_7",
     "sentiment_delta",
     "total_article_count",
+    "positive_article_count",
+    "negative_article_count",
 ]
 
 TECHNICAL_FEATURES = [
@@ -40,17 +45,68 @@ REGIME_FEATURES = [
     "sector_return_5d",
 ]
 
-ALL_FEATURES = SENTIMENT_FEATURES + TECHNICAL_FEATURES + REGIME_FEATURES
+# Sprint 7: Cross-sectional rank features
+CROSS_SECTIONAL_FEATURES = [
+    "rsi_rank",
+    "sentiment_rank",
+    "return_5d_rank",
+    "volume_rank",
+]
+
+# Sprint 7: Interaction and composite features
+INTERACTION_FEATURES = [
+    "sentiment_x_momentum",
+    "sentiment_x_volume",
+    "sentiment_x_rsi_rank",
+]
+
+# Sprint 7: Additional regime and crossover signals
+ENGINEERED_SIGNAL_FEATURES = [
+    "vix_regime",
+    "sector_alpha",
+    "price_vs_52w_high",
+    "bb_squeeze",
+    "rsi_cross_50",
+    "macd_positive_crossover",
+    "volume_surge",
+    "rsi_overbought",
+    "rsi_oversold",
+    "lag_return_1d",
+    "lag_return_5d",
+    "lag_sentiment",
+]
+
+ALL_FEATURES = (
+    SENTIMENT_FEATURES
+    + TECHNICAL_FEATURES
+    + REGIME_FEATURES
+    + CROSS_SECTIONAL_FEATURES
+    + INTERACTION_FEATURES
+    + ENGINEERED_SIGNAL_FEATURES
+)
 TARGET_COLUMN = "target"
 
 
 def load_feature_dataset(
     csv_path: Optional[Path] = None,
     features: Optional[List[str]] = None,
+    run_feature_engineering: bool = True,
 ) -> pd.DataFrame:
     """
-    Loads and cleans the training dataset from CSV or database.
-    Ensures temporal sorting and removes trailing NaNs.
+    Loads and cleans the training dataset from CSV, optionally running
+    the Sprint 7 feature engineering pipeline to add cross-sectional
+    rank features, interaction terms, and regime signals.
+
+    Parameters
+    ----------
+    csv_path : Path, optional
+        Path to the training CSV (default: data/training_dataset.csv).
+    features : list, optional
+        Explicit feature list to load (default: ALL_FEATURES).
+    run_feature_engineering : bool
+        If True (default), calls feature_engineer.py to add engineered
+        features before returning.  Set False if the CSV already
+        contains the engineered columns.
     """
     if csv_path is None:
         csv_path = DATA_DIR / "training_dataset.csv"
@@ -64,6 +120,23 @@ def load_feature_dataset(
     df = pd.read_csv(csv_path)
 
     # Sort strictly by date to preserve temporal structure
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values(by=["date", "ticker"]).reset_index(drop=True)
+
+    # Sprint 7: Run feature engineering to add cross-sectional & interaction features
+    if run_feature_engineering:
+        # Check if engineered features already present (avoid recomputing)
+        from models.feature_engineer import engineer_features, ALL_ENGINEERED_FEATURES
+        missing_engineered = [c for c in ALL_ENGINEERED_FEATURES if c not in df.columns]
+        if missing_engineered:
+            logger.info(
+                f"Running feature engineering ({len(missing_engineered)} new features)..."
+            )
+            df, _ = engineer_features(df)
+        else:
+            logger.info("Engineered features already present in dataset — skipping recomputation.")
+
+    # Normalise date back to date objects for compatibility
     df["date"] = pd.to_datetime(df["date"]).dt.date
     df = df.sort_values(by="date").reset_index(drop=True)
 
@@ -74,12 +147,13 @@ def load_feature_dataset(
     for col in available_features:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    clean_df = df.dropna(subset=available_features + [TARGET_COLUMN]).copy()
+    clean_df = df.dropna(subset=[TARGET_COLUMN]).copy()
     clean_df[TARGET_COLUMN] = clean_df[TARGET_COLUMN].astype(int)
 
     logger.info(
         f"Loaded {len(clean_df)} observations across {clean_df['ticker'].nunique()} tickers "
-        f"({clean_df['date'].iloc[0]} to {clean_df['date'].iloc[-1]})."
+        f"({clean_df['date'].iloc[0]} to {clean_df['date'].iloc[-1]}) "
+        f"with {len(available_features)} features."
     )
     return clean_df
 
@@ -95,6 +169,8 @@ def temporal_train_test_split(
     """
     if features is None:
         features = [f for f in ALL_FEATURES if f in df.columns]
+    else:
+        features = list(dict.fromkeys(features))
 
     df_sorted = df.sort_values(by="date").reset_index(drop=True)
 

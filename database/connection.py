@@ -12,7 +12,7 @@ def create_active_engine():
     """Tries PostgreSQL first; if connection fails or credentials aren't set, falls back to SQLite."""
     try:
         logger.info(f"Attempting connection to primary PostgreSQL database...")
-        pg_engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+        pg_engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args={"connect_timeout": 2})
         with pg_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         logger.info("Connected to PostgreSQL successfully.")

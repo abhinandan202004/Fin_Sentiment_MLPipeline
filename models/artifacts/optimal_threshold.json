@@ -1,0 +1,8 @@
+{
+  "optimal_threshold": 0.6,
+  "metric": "sharpe",
+  "sharpe": 8.7309,
+  "precision": 0.875,
+  "n_signals": 8,
+  "signal_rate": 0.0013
+}

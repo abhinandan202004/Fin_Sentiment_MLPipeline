@@ -28,7 +28,11 @@ from models.feature_store import (
     SENTIMENT_FEATURES,
     TECHNICAL_FEATURES,
     REGIME_FEATURES,
+    CROSS_SECTIONAL_FEATURES,
+    INTERACTION_FEATURES,
+    ENGINEERED_SIGNAL_FEATURES,
 )
+from models.feature_engineer import engineer_features, ALL_ENGINEERED_FEATURES
 from models.evaluate import evaluate_classifier, format_comparison_table
 from models.random_forest_model import train_random_forest
 from models.xgboost_model import train_xgboost
@@ -109,6 +113,7 @@ def tune_with_optuna(
                 "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
                 "reg_alpha": trial.suggest_float("reg_alpha", 1e-3, 10.0, log=True),
                 "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 10.0, log=True),
+                "scale_pos_weight": trial.suggest_float("scale_pos_weight", 0.5, 2.0),  # class imbalance
                 "eval_metric": "logloss",
                 "random_state": 42,
             }
@@ -138,16 +143,22 @@ def tune_with_optuna(
                 clf = LGBMClassifier(**params)
 
             clf.fit(X_tr, y_tr)
-            preds = clf.predict(X_val)
-            acc = (preds == y_val).mean()
-            scores.append(acc)
+            # Sprint 7: Use ROC-AUC instead of accuracy — far more robust for
+            # financial data with marginal class imbalance and continuous probabilities.
+            from sklearn.metrics import roc_auc_score
+            proba = clf.predict_proba(X_val)[:, 1]
+            try:
+                auc = roc_auc_score(y_val, proba)
+            except Exception:
+                auc = 0.5
+            scores.append(auc)
 
         return float(np.mean(scores))
 
     study = optuna.create_study(direction="maximize")
     study.optimize(objective, n_trials=n_trials)
 
-    logger.info(f"Optuna Best Trial Score (CV Accuracy): {study.best_value:.2%}")
+    logger.info(f"Optuna Best Trial Score (CV ROC-AUC): {study.best_value:.4f}")
     logger.info(f"Optuna Best Params: {study.best_params}")
     return study.best_params
 
@@ -302,15 +313,16 @@ def main():
     args = parser.parse_args()
 
     print("\n" + "=" * 80)
-    print(" SPRINT 3: ADVANCED ML MODEL COMPARISON & OPTUNA OPTIMIZATION")
+    print(" SPRINT 7: ADVANCED ML TRAINING — EXPANDED DATASET + FEATURE ENGINEERING")
     print("=" * 80 + "\n")
 
-    # 1. Load Feature Dataset
-    df = load_feature_dataset()
+    # 1. Load Feature Dataset (feature_store auto-runs Sprint 7 engineering)
+    df = load_feature_dataset(run_feature_engineering=True)
     returns_5d = df["future_return_5d"].values
 
-    # Determine features available in dataset
+    # Determine features available in dataset (base + engineered)
     available_features = [f for f in ALL_FEATURES if f in df.columns]
+    logger.info(f"Using {len(available_features)} features for training.")
 
     # 2. Temporal Split
     X_train, y_train, X_test, y_test, train_df, test_df = temporal_train_test_split(
