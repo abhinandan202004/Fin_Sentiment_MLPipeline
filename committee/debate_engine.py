@@ -29,6 +29,7 @@ from agents.committee.portfolio_manager import PortfolioManager
 from agents.committee.cio_agent import ChiefInvestmentOfficer
 from committee.committee_memory import CommitteeMemory
 from committee.governance_rules import GovernanceEngine
+from committee.adaptive_voting import AdaptiveVoting
 from agents.regime_agent import RegimeAgent
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -47,6 +48,7 @@ class DebateEngine:
         self.cio = ChiefInvestmentOfficer()
         self.memory = CommitteeMemory()
         self.regime_agent = RegimeAgent()
+        self.adaptive_voting = AdaptiveVoting()
 
     def run_debate(
         self,
@@ -63,10 +65,11 @@ class DebateEngine:
         ticker = ticker.upper()
         logger.info(f"Convening Investment Committee Debate for {ticker}...")
 
-        # 1. Determine Market Regime if not provided
+        regime_confidence = 0.75  # default when regime is user-provided
         if not regime:
             reg_res = self.regime_agent.detect_regime()
             regime = reg_res["regime"]
+            regime_confidence = reg_res["confidence"]
 
         default_sectors = {
             "NVDA": "Technology", "AAPL": "Technology", "MSFT": "Technology", "GOOGL": "Technology", "AMZN": "Consumer Cyclical",
@@ -152,7 +155,9 @@ class DebateEngine:
                 cio_rationale=cio_case["cio_rationale"],
                 model_probability=cio_case.get("model_probability"),
                 analog_win_rate=cio_case.get("analog_win_rate"),
-                evidence_agreement_score=cio_case.get("evidence_agreement_score")
+                evidence_agreement_score=cio_case.get("evidence_agreement_score"),
+                market_regime=regime,
+                regime_confidence=regime_confidence
             )
 
             # Record individual member votes

@@ -48,7 +48,10 @@ class CommitteeMemory:
         analog_win_rate: Optional[float] = None,
         evidence_agreement_score: Optional[float] = None,
         realized_return_5d: Optional[float] = None,
-        realized_return_20d: Optional[float] = None
+        realized_return_10d: Optional[float] = None,
+        realized_return_20d: Optional[float] = None,
+        market_regime: Optional[str] = None,
+        regime_confidence: Optional[float] = None
     ) -> str:
         """Records full committee decision into database."""
         session = SessionLocal()
@@ -75,7 +78,10 @@ class CommitteeMemory:
                 cio_rationale=cio_rationale,
                 expected_return=float(expected_return) if expected_return is not None else None,
                 realized_return_5d=float(realized_return_5d) if realized_return_5d is not None else None,
-                realized_return_20d=float(realized_return_20d) if realized_return_20d is not None else None
+                realized_return_10d=float(realized_return_10d) if realized_return_10d is not None else None,
+                realized_return_20d=float(realized_return_20d) if realized_return_20d is not None else None,
+                market_regime=market_regime,
+                regime_confidence=float(regime_confidence) if regime_confidence is not None else None
             )
             session.add(dec)
             session.commit()
@@ -93,11 +99,15 @@ class CommitteeMemory:
         self,
         decision_id: str,
         realized_return_5d: float,
-        realized_return_20d: Optional[float] = None
+        realized_return_10d: Optional[float] = None,
+        realized_return_20d: Optional[float] = None,
+        max_drawdown_5d: Optional[float] = None,
+        post_decision_volatility: Optional[float] = None
     ) -> bool:
         """
         Resolves realized return outcomes for a past decision and evaluates
         accuracy for each committee member who cast a vote.
+        Includes 5d/10d/20d returns, max drawdown, and post-decision volatility.
         """
         session = SessionLocal()
         try:
@@ -107,8 +117,14 @@ class CommitteeMemory:
                 return False
 
             dec.realized_return_5d = float(realized_return_5d)
+            if realized_return_10d is not None:
+                dec.realized_return_10d = float(realized_return_10d)
             if realized_return_20d is not None:
                 dec.realized_return_20d = float(realized_return_20d)
+            if max_drawdown_5d is not None:
+                dec.max_drawdown_5d = float(max_drawdown_5d)
+            if post_decision_volatility is not None:
+                dec.post_decision_volatility = float(post_decision_volatility)
             dec.outcome_date = datetime.now(timezone.utc).date()
 
             # Directional accuracy: positive return favors BUY, negative favors SELL/REDUCE/HOLD
@@ -140,7 +156,7 @@ class CommitteeMemory:
                         v.is_accurate = is_positive
 
             session.commit()
-            logger.info(f"Updated outcomes for Decision #{decision_id}: 5d return = {realized_return_5d:+.2%}")
+            logger.info(f"Updated outcomes for Decision #{decision_id}: 5d={realized_return_5d:+.2%}, dd={max_drawdown_5d or 0:.2%}")
             return True
         except Exception as e:
             session.rollback()
@@ -225,29 +241,120 @@ class CommitteeMemory:
             record = query.first()
             if not record:
                 return None
-            return {
-                "id": record.id,
-                "timestamp": record.timestamp.isoformat() if record.timestamp else None,
-                "ticker": record.ticker,
-                "decision": record.decision,
-                "confidence": record.confidence,
-                "consensus_score": record.consensus_score,
-                "allocation": record.allocation,
-                "bull_score": record.bull_score,
-                "bear_score": record.bear_score,
-                "risk_score": record.risk_score,
-                "final_score": record.final_score,
-                "evidence_quality": record.evidence_quality,
-                "evidence_agreement_score": record.evidence_agreement_score,
-                "model_probability": record.model_probability,
-                "analog_win_rate": record.analog_win_rate,
-                "governance_passed": record.governance_passed,
-                "cio_rationale": record.cio_rationale,
-                "realized_return_5d": record.realized_return_5d,
-                "realized_return_20d": record.realized_return_20d
-            }
+            return self._decision_to_dict(record)
         finally:
             session.close()
+
+    def get_all_resolved_decisions(self) -> List[Dict[str, Any]]:
+        """Returns all decisions that have realized_return_5d resolved."""
+        session = SessionLocal()
+        try:
+            records = (
+                session.query(CommitteeDecision)
+                .filter(CommitteeDecision.realized_return_5d.isnot(None))
+                .order_by(CommitteeDecision.timestamp.asc())
+                .all()
+            )
+            return [self._decision_to_dict(r) for r in records]
+        finally:
+            session.close()
+
+    def get_pending_decisions(self) -> List[Dict[str, Any]]:
+        """Returns all decisions with no realized return (pending outcome resolution)."""
+        session = SessionLocal()
+        try:
+            records = (
+                session.query(CommitteeDecision)
+                .filter(CommitteeDecision.realized_return_5d.is_(None))
+                .order_by(CommitteeDecision.timestamp.asc())
+                .all()
+            )
+            return [self._decision_to_dict(r) for r in records]
+        finally:
+            session.close()
+
+    def get_decisions_by_regime(self, regime: str) -> List[Dict[str, Any]]:
+        """Returns all resolved decisions for a given market regime."""
+        session = SessionLocal()
+        try:
+            records = (
+                session.query(CommitteeDecision)
+                .filter(
+                    CommitteeDecision.market_regime == regime,
+                    CommitteeDecision.realized_return_5d.isnot(None)
+                )
+                .order_by(CommitteeDecision.timestamp.asc())
+                .all()
+            )
+            return [self._decision_to_dict(r) for r in records]
+        finally:
+            session.close()
+
+    def get_all_votes_with_outcomes(self) -> List[Dict[str, Any]]:
+        """Returns all votes that have been evaluated (is_accurate is not None)."""
+        session = SessionLocal()
+        try:
+            votes = (
+                session.query(CommitteeVote)
+                .filter(CommitteeVote.is_accurate.isnot(None))
+                .all()
+            )
+            results = []
+            for v in votes:
+                dec = session.query(CommitteeDecision).filter(CommitteeDecision.id == v.decision_id).first()
+                results.append({
+                    "vote_id": v.id,
+                    "decision_id": v.decision_id,
+                    "ticker": v.ticker,
+                    "agent_name": v.agent_name,
+                    "stance": v.stance,
+                    "confidence": v.confidence,
+                    "is_accurate": v.is_accurate,
+                    "market_regime": dec.market_regime if dec else None,
+                    "realized_return_5d": dec.realized_return_5d if dec else None,
+                    "realized_return_10d": dec.realized_return_10d if dec else None,
+                    "realized_return_20d": dec.realized_return_20d if dec else None,
+                    "max_drawdown_5d": dec.max_drawdown_5d if dec else None,
+                    "decision": dec.decision if dec else None,
+                    "model_probability": dec.model_probability if dec else None,
+                    "analog_win_rate": dec.analog_win_rate if dec else None,
+                    "evidence_agreement_score": dec.evidence_agreement_score if dec else None
+                })
+            return results
+        finally:
+            session.close()
+
+    @staticmethod
+    def _decision_to_dict(record) -> Dict[str, Any]:
+        """Converts a CommitteeDecision ORM object to a dictionary."""
+        return {
+            "id": record.id,
+            "timestamp": record.timestamp.isoformat() if record.timestamp else None,
+            "decision_date": record.decision_date.isoformat() if record.decision_date else None,
+            "ticker": record.ticker,
+            "decision": record.decision,
+            "confidence": record.confidence,
+            "consensus_score": record.consensus_score,
+            "allocation": record.allocation,
+            "bull_score": record.bull_score,
+            "bear_score": record.bear_score,
+            "risk_score": record.risk_score,
+            "final_score": record.final_score,
+            "evidence_quality": record.evidence_quality,
+            "evidence_agreement_score": record.evidence_agreement_score,
+            "model_probability": record.model_probability,
+            "analog_win_rate": record.analog_win_rate,
+            "governance_passed": record.governance_passed,
+            "cio_rationale": record.cio_rationale,
+            "market_regime": record.market_regime,
+            "regime_confidence": record.regime_confidence,
+            "realized_return_5d": record.realized_return_5d,
+            "realized_return_10d": record.realized_return_10d,
+            "realized_return_20d": record.realized_return_20d,
+            "max_drawdown_5d": record.max_drawdown_5d,
+            "post_decision_volatility": record.post_decision_volatility,
+            "correct_direction": record.correct_direction
+        }
 
 
 if __name__ == "__main__":

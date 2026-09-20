@@ -49,12 +49,24 @@ def init_db():
             database.models.TrainingFeature.__table__.drop(bind=engine, checkfirst=True)
     if "committee_decisions" in inspector.get_table_names():
         existing_cols = {col["name"] for col in inspector.get_columns("committee_decisions")}
-        for col_name in ["model_probability", "analog_win_rate", "evidence_agreement_score", "realized_return_5d", "realized_return_20d"]:
+        sprint6_cols = ["model_probability", "analog_win_rate", "evidence_agreement_score", "realized_return_5d", "realized_return_20d"]
+        sprint7_float_cols = ["regime_confidence", "realized_return_10d", "max_drawdown_5d", "post_decision_volatility"]
+        sprint7_string_cols = ["market_regime"]
+        for col_name in sprint6_cols + sprint7_float_cols:
             if col_name not in existing_cols:
                 logger.info(f"Adding missing column {col_name} to committee_decisions...")
                 try:
                     with engine.connect() as conn:
                         conn.execute(text(f"ALTER TABLE committee_decisions ADD COLUMN {col_name} FLOAT;"))
+                        conn.commit()
+                except Exception as e:
+                    logger.warning(f"Could not add column {col_name}: {e}")
+        for col_name in sprint7_string_cols:
+            if col_name not in existing_cols:
+                logger.info(f"Adding missing column {col_name} to committee_decisions...")
+                try:
+                    with engine.connect() as conn:
+                        conn.execute(text(f"ALTER TABLE committee_decisions ADD COLUMN {col_name} VARCHAR(30);"))
                         conn.commit()
                 except Exception as e:
                     logger.warning(f"Could not add column {col_name}: {e}")

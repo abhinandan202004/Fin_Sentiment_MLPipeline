@@ -223,6 +223,9 @@ class CommitteeDecision(Base):
     prediction_date = Column(Date, default=lambda: datetime.now(timezone.utc).date())
     outcome_date = Column(Date, nullable=True)
 
+    market_regime = Column(String(30), nullable=True)  # Bull, Bear, Sideways, High Volatility, Low Volatility
+    regime_confidence = Column(Float, nullable=True)
+
     ticker = Column(String(20), nullable=False, index=True)
     decision = Column(String(20), nullable=False)  # STRONG BUY, BUY, WATCHLIST, HOLD, REDUCE, SELL, REJECTED
     confidence = Column(Float, nullable=False)
@@ -245,7 +248,10 @@ class CommitteeDecision(Base):
     expected_return = Column(Float, nullable=True)
     realized_return = Column(Float, nullable=True)
     realized_return_5d = Column(Float, nullable=True)
+    realized_return_10d = Column(Float, nullable=True)
     realized_return_20d = Column(Float, nullable=True)
+    max_drawdown_5d = Column(Float, nullable=True)  # Max intraday drawdown in 5d window
+    post_decision_volatility = Column(Float, nullable=True)  # Realized vol 5d after decision
     correct_direction = Column(Boolean, nullable=True)
 
     def __repr__(self):
