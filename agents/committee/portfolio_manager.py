@@ -86,15 +86,23 @@ class PortfolioManager:
         net_sentiment = (bull_score - bear_score) / 100.0  # e.g. (75 - 40) / 100 = 0.35
 
         scaled_size = base_size * (1.0 + (net_sentiment * 0.50))
-        target_allocation = round(min(max(scaled_size, 0.02), risk_limit, self.constraints.max_single_position), 4)
+        target_allocation = round(min(max(scaled_size, 0.0), risk_limit, self.constraints.max_single_position), 4)
 
         delta = round(target_allocation - current_weight, 4)
 
-        if delta > 0.03:
+        if bear_score >= 65.0 and bull_score <= 40.0:
+            action = "SELL"
+            target_allocation = 0.0
+            args.append(f"Bear dominance ({bear_score:.0f} vs {bull_score:.0f}) warrants total position liquidation (0.0% allocation)")
+        elif delta > 0.05 and target_allocation >= 0.10:
+            action = "STRONG BUY"
+            args.append(f"High-conviction spread (+{delta:.1%}) justifies aggressive capital allocation up to {target_allocation:.1%}")
+            args.append(f"Fully compliant with Risk Officer ceiling of {risk_limit:.1%}")
+        elif delta > 0.02:
             action = "BUY"
             args.append(f"Half-Kelly model and debate spread indicate {target_allocation:.1%} target allocation (+{delta:.1%} expansion)")
             args.append(f"Fully compliant with Risk Officer ceiling of {risk_limit:.1%}")
-        elif delta < -0.03:
+        elif delta < -0.02:
             action = "REDUCE"
             args.append(f"Target allocation {target_allocation:.1%} requires trimming current position by {abs(delta):.1%}")
         else:

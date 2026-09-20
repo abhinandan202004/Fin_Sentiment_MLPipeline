@@ -43,7 +43,12 @@ class CommitteeMemory:
         evidence_quality: str,
         governance_passed: bool,
         cio_rationale: str,
-        expected_return: Optional[float] = None
+        expected_return: Optional[float] = None,
+        model_probability: Optional[float] = None,
+        analog_win_rate: Optional[float] = None,
+        evidence_agreement_score: Optional[float] = None,
+        realized_return_5d: Optional[float] = None,
+        realized_return_20d: Optional[float] = None
     ) -> str:
         """Records full committee decision into database."""
         session = SessionLocal()
@@ -63,9 +68,14 @@ class CommitteeMemory:
                 evidence_score=float(evidence_score),
                 final_score=float(final_score),
                 evidence_quality=evidence_quality.upper(),
+                evidence_agreement_score=float(evidence_agreement_score) if evidence_agreement_score is not None else 0.50,
+                model_probability=float(model_probability) if model_probability is not None else None,
+                analog_win_rate=float(analog_win_rate) if analog_win_rate is not None else None,
                 governance_passed=bool(governance_passed),
                 cio_rationale=cio_rationale,
-                expected_return=float(expected_return) if expected_return is not None else None
+                expected_return=float(expected_return) if expected_return is not None else None,
+                realized_return_5d=float(realized_return_5d) if realized_return_5d is not None else None,
+                realized_return_20d=float(realized_return_20d) if realized_return_20d is not None else None
             )
             session.add(dec)
             session.commit()
@@ -76,6 +86,66 @@ class CommitteeMemory:
             session.rollback()
             logger.error(f"Failed to record committee decision: {e}")
             raise
+        finally:
+            session.close()
+
+    def update_outcomes(
+        self,
+        decision_id: str,
+        realized_return_5d: float,
+        realized_return_20d: Optional[float] = None
+    ) -> bool:
+        """
+        Resolves realized return outcomes for a past decision and evaluates
+        accuracy for each committee member who cast a vote.
+        """
+        session = SessionLocal()
+        try:
+            dec = session.query(CommitteeDecision).filter(CommitteeDecision.id == decision_id).first()
+            if not dec:
+                logger.warning(f"Decision ID {decision_id} not found for outcome update.")
+                return False
+
+            dec.realized_return_5d = float(realized_return_5d)
+            if realized_return_20d is not None:
+                dec.realized_return_20d = float(realized_return_20d)
+            dec.outcome_date = datetime.now(timezone.utc).date()
+
+            # Directional accuracy: positive return favors BUY, negative favors SELL/REDUCE/HOLD
+            is_positive = realized_return_5d > 0.0
+            dec.correct_direction = (
+                (is_positive and dec.decision in ("STRONG BUY", "BUY")) or
+                (not is_positive and dec.decision in ("SELL", "REDUCE", "HOLD", "REJECTED", "WATCHLIST"))
+            )
+
+            # Evaluate each agent vote
+            votes = session.query(CommitteeVote).filter(CommitteeVote.decision_id == decision_id).all()
+            for v in votes:
+                stance = v.stance.upper()
+                agent = v.agent_name
+                if agent == "BullAnalyst":
+                    v.is_accurate = is_positive if stance in ("BUY", "STRONG BUY") else (not is_positive)
+                elif agent == "BearAnalyst":
+                    v.is_accurate = (not is_positive) if stance in ("SELL", "REDUCE", "HOLD", "AVOID") else is_positive
+                elif agent == "EvidenceProsecutor":
+                    # Prosecutor was accurate if it flagged high risk / low data and return was negative, or passed and return was positive
+                    if stance in ("FAIL", "REJECT", "CHALLENGE"):
+                        v.is_accurate = not is_positive
+                    else:
+                        v.is_accurate = is_positive
+                elif agent == "RiskOfficer":
+                    if stance in ("REJECT", "REDUCE"):
+                        v.is_accurate = (not is_positive) or (realized_return_5d < 0.01)
+                    else:
+                        v.is_accurate = is_positive
+
+            session.commit()
+            logger.info(f"Updated outcomes for Decision #{decision_id}: 5d return = {realized_return_5d:+.2%}")
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Failed to update outcomes: {e}")
+            return False
         finally:
             session.close()
 
@@ -168,8 +238,13 @@ class CommitteeMemory:
                 "risk_score": record.risk_score,
                 "final_score": record.final_score,
                 "evidence_quality": record.evidence_quality,
+                "evidence_agreement_score": record.evidence_agreement_score,
+                "model_probability": record.model_probability,
+                "analog_win_rate": record.analog_win_rate,
                 "governance_passed": record.governance_passed,
-                "cio_rationale": record.cio_rationale
+                "cio_rationale": record.cio_rationale,
+                "realized_return_5d": record.realized_return_5d,
+                "realized_return_20d": record.realized_return_20d
             }
         finally:
             session.close()

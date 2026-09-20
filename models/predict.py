@@ -16,12 +16,7 @@ import shap
 
 from config import ARTIFACTS_DIR, DATA_DIR
 from database.connection import SessionLocal
-from database.models import TrainingFeature, MarketData, Article, Prediction
-from ingestion.market.yfinance_ingestor import YFinanceIngestor
-from ingestion.news import fetch_and_store_news
-from nlp.sentiment import score_unscored_articles
-from features.technical import compute_ticker_technical_indicators, fetch_market_regime
-from features.sentiment_features import compute_daily_sentiment_features
+from database.models import TrainingFeature, MarketData, Prediction
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("PredictionService")
@@ -47,17 +42,43 @@ class PredictionService:
             with open(self.meta_path, "r") as f:
                 self.metadata = json.load(f)
 
+        self.threshold_path = ARTIFACTS_DIR / "optimal_threshold.json"
+        self.threshold = 0.55
+        if self.threshold_path.exists():
+            try:
+                with open(self.threshold_path, "r") as f:
+                    th_info = json.load(f)
+                    self.threshold = float(th_info.get("optimal_threshold", 0.55))
+            except Exception:
+                self.threshold = 0.55
+
         # Initialize SHAP explainer
         self.explainer = shap.TreeExplainer(self.model)
 
     def get_latest_feature_vector(self, ticker: str) -> Tuple[pd.Series, str]:
         """
-        Retrieves the latest available feature vector for ticker from database
-        or live yfinance computation.
+        Retrieves the latest available feature vector for ticker.
+        Prioritizes the 30,025-row engineered dataset (43 features across 25 tickers).
+        Falls back to database / yfinance if ticker is outside the core universe.
         """
+        ticker = ticker.upper()
+        try:
+            from models.feature_store import load_feature_dataset
+            df = load_feature_dataset()
+            ticker_df = df[df["ticker"] == ticker].sort_values(by="date")
+            if not ticker_df.empty:
+                latest_row = ticker_df.iloc[-1]
+                row_dict = {}
+                for f in self.features:
+                    val = latest_row.get(f, 0.0)
+                    row_dict[f] = float(val) if pd.notna(val) else 0.0
+                return pd.Series(row_dict), str(latest_row.get("date", date.today()))
+        except Exception as e:
+            logger.warning(f"Feature store retrieval fallback for {ticker}: {e}")
+
+        # Fallback to DB or live computation
         db = SessionLocal()
         try:
-            # 1. Check feature store table first
             latest_tf = (
                 db.query(TrainingFeature)
                 .filter(TrainingFeature.ticker == ticker)
@@ -67,13 +88,12 @@ class PredictionService:
 
             if latest_tf:
                 row_dict = {f: getattr(latest_tf, f, 0.0) for f in self.features}
-                # Clean nulls
                 for k, v in row_dict.items():
                     if v is None:
                         row_dict[k] = 0.0
                 return pd.Series(row_dict), str(latest_tf.date)
 
-            # 2. Fallback: live computation via yfinance
+            # Live computation via yfinance
             logger.info(f"Building live feature vector for {ticker}...")
             ingestor = YFinanceIngestor(db=db)
             ingestor.ingest_ticker(ticker, period="6mo", db=db)
@@ -101,31 +121,46 @@ class PredictionService:
     def predict(self, ticker: str) -> Dict[str, Any]:
         """
         Executes end-to-end prediction for ticker.
-        Returns standardized JSON contract for future Agent layer.
+        Outputs calibrated probability, optimal threshold, decision signal,
+        and fine-grained TreeSHAP feature attributions.
         """
         feature_vector, as_of_date = self.get_latest_feature_vector(ticker)
         X = pd.DataFrame([feature_vector[self.features]])
 
-        # Inference
-        pred_label_int = int(self.model.predict(X)[0])
+        # Model Probabilities & Calibrated Threshold Decision
         probabilities = self.model.predict_proba(X)[0]
-        confidence = float(probabilities[1]) if pred_label_int == 1 else float(probabilities[0])
-        prediction_str = "BUY" if pred_label_int == 1 else "NOT BUY"
-
-        # Expected 5-day return proxy (scaled by probability edge above 50%)
         prob_buy = float(probabilities[1])
-        base_expected_ret = (prob_buy - 0.50) * 0.10  # ~2-4% expected move based on conviction
+        prediction_str = "BUY" if prob_buy >= self.threshold else "NOT BUY"
+        confidence = prob_buy if prediction_str == "BUY" else float(probabilities[0])
+
+        # Expected 5-day return proxy
+        base_expected_ret = (prob_buy - self.threshold) * 0.10
 
         # Volatility & Risk calculation
+        vix = float(feature_vector.get("vix_level", 20.0))
         vol = float(feature_vector.get("atr", 3.0)) / (float(feature_vector.get("close", 100.0)) + 1e-5)
-        if vol > 0.04:
+        if vix > 25.0 or vol > 0.04:
             risk = "HIGH"
-        elif vol > 0.02:
-            risk = "MEDIUM"
-        else:
+        elif vix < 16.0 and vol < 0.02:
             risk = "LOW"
+        else:
+            risk = "MEDIUM"
 
-        # SHAP Instance Explanation
+        # Market Regime identification
+        spy_5d = float(feature_vector.get("spy_return_5d", 0.0))
+        spy_vol = float(feature_vector.get("spy_volatility", 0.15))
+        if vix > 25.0 or spy_vol > 0.22:
+            market_regime = "High Volatility"
+        elif vix < 15.0 and spy_vol < 0.14:
+            market_regime = "Low Volatility"
+        elif spy_5d > 0.01:
+            market_regime = "Bull"
+        elif spy_5d < -0.01:
+            market_regime = "Bear"
+        else:
+            market_regime = "Neutral"
+
+        # SHAP Tree Explanations
         shap_vals = self.explainer.shap_values(X)
         if isinstance(shap_vals, list):
             sv = shap_vals[1][0] if len(shap_vals) > 1 else shap_vals[0][0]
@@ -145,19 +180,35 @@ class PredictionService:
         positive_drivers = sorted([d for d in drivers if d["impact"] > 0], key=lambda x: x["impact"], reverse=True)
         negative_drivers = sorted([d for d in drivers if d["impact"] < 0], key=lambda x: x["impact"])
 
-        top_pos = [f"{d['feature']} ({d['impact']:+.3f})" for d in positive_drivers[:3]]
-        top_neg = [f"{d['feature']} ({d['impact']:+.3f})" for d in negative_drivers[:3]]
+        top_pos = [f"{d['feature']} ({d['impact']:+.3f})" for d in positive_drivers[:4]]
+        top_neg = [f"{d['feature']} ({d['impact']:+.3f})" for d in negative_drivers[:4]]
+
+        quant_features = {
+            "sentiment_rank": round(float(feature_vector.get("sentiment_rank", 0.5)), 3),
+            "vix_level": round(vix, 2),
+            "market_regime": market_regime,
+            "bb_squeeze": round(float(feature_vector.get("bb_squeeze", 0.0)), 2),
+            "sector_return_5d": round(float(feature_vector.get("sector_return_5d", 0.0)), 4),
+            "rsi_rank": round(float(feature_vector.get("rsi_rank", 0.5)), 3),
+            "volume_surge": int(feature_vector.get("volume_surge", 0)),
+        }
 
         result = {
             "ticker": ticker.upper(),
             "date": as_of_date,
+            "signal": prediction_str,
             "prediction": prediction_str,
+            "probability": round(prob_buy, 4),
+            "threshold": round(self.threshold, 2),
             "confidence": round(confidence, 4),
             "expected_5d_return": round(base_expected_ret, 4),
             "risk": risk,
+            "market_regime": market_regime,
             "top_positive_drivers": top_pos,
             "top_negative_drivers": top_neg,
-            "model_version": self.metadata.get("model", "optuna_tuned_v1"),
+            "feature_contributions": drivers,
+            "quant_features": quant_features,
+            "model_version": self.metadata.get("model", "Random Forest"),
         }
 
         # Persist to database predictions table
@@ -167,8 +218,8 @@ class PredictionService:
                 ticker=ticker.upper(),
                 prediction=prediction_str,
                 confidence=confidence,
-                model_version=self.metadata.get("model", "optuna_tuned_v1"),
-                shap_drivers={"positive": positive_drivers, "negative": negative_drivers},
+                model_version=self.metadata.get("model", "Random Forest"),
+                shap_drivers={"positive": positive_drivers[:5], "negative": negative_drivers[:5]},
             )
             db.add(db_pred)
             db.commit()

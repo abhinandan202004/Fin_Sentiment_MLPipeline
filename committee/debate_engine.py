@@ -68,12 +68,29 @@ class DebateEngine:
             reg_res = self.regime_agent.detect_regime()
             regime = reg_res["regime"]
 
-        # Default evidence bank if not provided (pulling from multi-modal pipeline)
-        if not evidence:
-            evidence = self._get_default_evidence(ticker)
+        default_sectors = {
+            "NVDA": "Technology", "AAPL": "Technology", "MSFT": "Technology", "GOOGL": "Technology", "AMZN": "Consumer Cyclical",
+            "JPM": "Financials", "BAC": "Financials", "GS": "Financials", "MS": "Financials", "WFC": "Financials",
+            "XOM": "Energy", "CVX": "Energy", "COP": "Energy", "SLB": "Energy", "EOG": "Energy",
+            "JNJ": "Healthcare", "PFE": "Healthcare", "UNH": "Healthcare", "LLY": "Healthcare", "ABBV": "Healthcare",
+            "PG": "Consumer Defensive", "KO": "Consumer Defensive", "PEP": "Consumer Defensive", "COST": "Consumer Defensive", "WMT": "Consumer Defensive"
+        }
 
+        # Default evidence bank if not provided: pull from live multi-modal research pipeline
+        if not evidence:
+            try:
+                from agents.report_generator import ResearchReportGenerator
+                rep_gen = ResearchReportGenerator()
+                report_data = rep_gen.generate_report(ticker, save_markdown=False)
+                evidence = report_data
+                logger.info(f"Successfully ingested live multi-modal evidence for {ticker}")
+            except Exception as e:
+                logger.warning(f"Could not pull live research evidence for {ticker} ({e}). Using fallback.")
+                evidence = self._get_default_evidence(ticker)
+
+        sec = evidence.get("sector") or default_sectors.get(ticker, "Technology")
+        sector_mapping = sector_mapping or {ticker: sec}
         current_portfolio = current_portfolio or {"Cash": 0.15, ticker: 0.05}
-        sector_mapping = sector_mapping or {ticker: evidence.get("sector", "Technology")}
         risk_metrics = risk_metrics or {"beta": 1.08, "var_95": 0.026, "hhi": 0.21}
         current_weight = current_portfolio.get(ticker, 0.0)
 
@@ -129,10 +146,13 @@ class DebateEngine:
                 bear_score=cio_case["bear_score"],
                 risk_score=cio_case["risk_score"],
                 evidence_score=cio_case["evidence_score"],
-                final_score=cio_case["final_score"],
+                final_score=cio_case.get("final_score", 0.0),
                 evidence_quality=cio_case["evidence_quality"],
                 governance_passed=cio_case["governance_passed"],
-                cio_rationale=cio_case["cio_rationale"]
+                cio_rationale=cio_case["cio_rationale"],
+                model_probability=cio_case.get("model_probability"),
+                analog_win_rate=cio_case.get("analog_win_rate"),
+                evidence_agreement_score=cio_case.get("evidence_agreement_score")
             )
 
             # Record individual member votes
@@ -150,11 +170,19 @@ class DebateEngine:
             "decision": cio_case["decision"],
             "confidence": cio_case["confidence"],
             "consensus_score": cio_case["consensus_score"],
+            "evidence_agreement_score": cio_case.get("evidence_agreement_score", prosecutor_case.get("evidence_agreement_score", 0.50)),
+            "model_probability": cio_case.get("model_probability", 0.50),
+            "analog_win_rate": cio_case.get("analog_win_rate", 0.50),
             "allocation": cio_case["allocation"],
+            "bull_score": cio_case["bull_score"],
+            "bear_score": cio_case["bear_score"],
+            "risk_score": cio_case["risk_score"],
             "bull_arguments": bull_case["arguments"][:3],
             "bear_arguments": bear_case["arguments"][:3],
             "risk_assessment": {
-                "risk_level": risk_case["risk_level"]
+                "risk_level": risk_case["risk_level"],
+                "risk_score": risk_case["risk_score"],
+                "veto_triggered": risk_case["veto_triggered"]
             },
             "evidence_quality": cio_case["evidence_quality"],
             "governance_passed": cio_case["governance_passed"],
@@ -171,7 +199,8 @@ class DebateEngine:
             bear_case=bear_case,
             risk_case=risk_case,
             pm_case=pm_case,
-            cio_case=cio_case
+            cio_case=cio_case,
+            sector_mapping=sector_mapping
         )
 
         return {
@@ -197,16 +226,34 @@ class DebateEngine:
         bear_case: Dict[str, Any],
         risk_case: Dict[str, Any],
         pm_case: Dict[str, Any],
-        cio_case: Dict[str, Any]
+        cio_case: Dict[str, Any],
+        sector_mapping: Optional[Dict[str, str]] = None
     ) -> str:
         """Generates institutional markdown debate report adhering to the required standard."""
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         accuracies = self.memory.get_agent_accuracies()
+        sector_mapping = sector_mapping or {}
+
+        # Safely extract multi-modal variables
+        ml_prob = float(evidence.get("probability", evidence.get("ml_prob", 0.50)))
+        threshold = float(evidence.get("threshold", evidence.get("optimal_threshold", 0.55)))
+        analogs = evidence.get("historical_analogs", evidence.get("analogs", {}))
+        analog_rate = float(analogs.get("success_rate", evidence.get("analog_win_rate", 0.50)))
+        analog_count = int(analogs.get("sample_size", analogs.get("similar_cases", evidence.get("analog_count", 50))))
+        tech = evidence.get("technical_summary", {})
+        rsi = float(tech.get("rsi", evidence.get("rsi", 50.0)))
+        volatility = float(evidence.get("volatility", tech.get("volatility", 0.25)))
+        quant = evidence.get("quant_features", {})
+        sentiment_score = float(quant.get("avg_sentiment", evidence.get("sentiment_score", 0.0)))
+        sector_name = sector_mapping.get(ticker, evidence.get("sector", "Technology"))
 
         bull_bullets = "\n".join([f"- {a}" for a in bull_case["arguments"]])
         bear_bullets = "\n".join([f"- {a}" for a in bear_case["arguments"]])
         risk_bullets = "\n".join([f"- {a}" for a in risk_case["arguments"]])
         prosecutor_bullets = "\n".join([f"- {a}" for a in prosecutor_case["arguments"]])
+
+        stream_stances = prosecutor_case.get("stream_stances", {})
+        agreement_score = prosecutor_case.get("evidence_agreement_score", 0.50)
 
         report_md = f"""# Investment Committee Debate Report: `{ticker}`
 **Convened:** {now_str}  
@@ -216,18 +263,23 @@ class DebateEngine:
 ---
 
 ## 1. Research Summary
-- **Asset Under Review:** `{ticker}` ({evidence.get('sector', 'Technology')})
-- **ML Directional Probability:** {evidence.get('ml_prob', 0.65)*100:.0f}%
-- **FinBERT News Sentiment:** {evidence.get('sentiment_score', 0.35):+.2f}
-- **Historical Analog Win Rate:** {evidence.get('analog_win_rate', 0.68)*100:.0f}% ({evidence.get('analog_count', 10)} matched regimes)
-- **Technical RSI (14):** {evidence.get('rsi', 58.0):.1f} | **Annual Volatility:** {evidence.get('volatility', 0.28)*100:.1f}%
+- **Asset Under Review:** `{ticker}` ({sector_name})
+- **ML Directional Probability:** {ml_prob*100:.1f}% (Optimal Conviction Hurdle: {threshold*100:.1f}%)
+- **FinBERT News Sentiment:** {sentiment_score:+.2f}
+- **Historical Analog Win Rate:** {analog_rate*100:.1f}% ({analog_count} situations from 30k FAISS index)
+- **Technical RSI (14):** {rsi:.1f} | **Annual Volatility:** {volatility*100:.1f}%
 
 ---
 
 ## 2. Evidence Quality & Prosecutor Audit
 - **Rating:** `{prosecutor_case['evidence_quality']}` (Audit Score: **{prosecutor_case['evidence_score']} / 100**)
 - **Prosecutor Stance:** `{prosecutor_case['stance']}`
-- **Audit Findings:**
+- **Evidence Agreement Score:** **{agreement_score*100:.0f}%** across 4 independent evidence streams
+  - **ML Model:** `{stream_stances.get('ml_model', 'NEUTRAL')}`
+  - **Historical Analogs:** `{stream_stances.get('historical_analogs', 'NEUTRAL')}`
+  - **Technical Setup:** `{stream_stances.get('technical_setup', 'NEUTRAL')}`
+  - **Fundamentals / Sentiment:** `{stream_stances.get('fundamental_sentiment', 'NEUTRAL')}`
+- **Adversarial Audit Findings:**
 {prosecutor_bullets}
 
 ---
@@ -266,6 +318,7 @@ class DebateEngine:
 | **Risk Officer** | `{risk_case['stance']}` | Max {risk_case['position_limit']*100:.1f}% | {risk_case['confidence']*100:.0f}% | {accuracies.get('Risk Officer', 0.69)*100:.0f}% |
 | **Portfolio Manager** | `{pm_case['action']}` | Target {pm_case['allocation']*100:.1f}% | {pm_case['confidence']*100:.0f}% | - |
 
+- **Evidence Agreement Score:** **{agreement_score*100:.0f}%**
 - **Committee Consensus Score:** **{cio_case['consensus_score']:.2f} / 1.00**
 - **Calibrated Confidence:** **{cio_case['confidence']*100:.0f}%**
 
@@ -292,9 +345,12 @@ class DebateEngine:
 
 ## 9. Chief Investment Officer (CIO) Verdict
 - **Authoritative Decision:** **`{cio_case['decision']}`**
-- **Final Weighted Score:** **{cio_case['final_score']:.1f}**  
-  *(Formula: 0.35×Bull[{cio_case['bull_score']:.0f}] - 0.25×Bear[{cio_case['bear_score']:.0f}] - 0.25×Risk[{cio_case['risk_score']:.0f}] + 0.15×Evidence[{cio_case['evidence_score']:.0f}]) = {cio_case['final_score']:.1f}*
-- **Final Allocation:** **{cio_case['allocation']*100:.1f}%**
+- **Governance Resolution:** **Explainable Rule-Based Governance Hierarchy**
+  - Model Conviction Check: {ml_prob*100:.1f}% vs {threshold*100:.1f}% Hurdle ({'CLEARED' if ml_prob >= threshold else 'BELOW THRESHOLD'})
+  - Historical Analog Win Rate: {analog_rate*100:.1f}% (50 matched cases from 30,025 FAISS index)
+  - Cross-Stream Evidence Agreement: {agreement_score*100:.0f}%
+  - Risk Officer Posture: `{risk_case['risk_level']}` (Veto Enforced: {risk_case['veto_triggered']})
+- **Final Target Allocation:** **{cio_case['allocation']*100:.1f}%**
 
 ### Executive Rationale:
 > {cio_case['cio_rationale']}

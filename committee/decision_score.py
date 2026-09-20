@@ -16,86 +16,171 @@ from typing import Dict, List, Any, Optional
 
 
 class DecisionScorer:
-    """Calculates weighted committee decision scores, consensus, and calibrated confidence."""
+    """Calculates explainable rule-based committee decisions, consensus, and calibrated confidence."""
 
-    def __init__(
-        self,
-        weight_bull: float = 0.35,
-        weight_bear: float = 0.25,
-        weight_risk: float = 0.25,
-        weight_evidence: float = 0.15
-    ):
-        self.w_bull = weight_bull
-        self.w_bear = weight_bear
-        self.w_risk = weight_risk
-        self.w_evi = weight_evidence
+    def __init__(self):
+        pass
 
-    def calculate_score(
+    def evaluate_rules(
         self,
         bull_score: float,
         bear_score: float,
         risk_score: float,
         evidence_score: float,
+        evidence_quality: str,
+        evidence_agreement_score: float = 0.50,
+        model_probability: float = 0.50,
+        optimal_threshold: float = 0.55,
+        analog_win_rate: float = 0.50,
+        ci_lower: float = 0.0,
         veto_triggered: bool = False,
-        evidence_quality: str = "HIGH"
+        veto_reasons: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Computes final governance score and categorizes the decision.
-        Scores are expected on a 0-100 scale.
+        Executes institutional rule-based governance hierarchy over arbitrary magic-number weights.
+        Decision ladder: STRONG BUY, BUY, WATCHLIST, HOLD, REDUCE, SELL, REJECTED.
         """
+        veto_reasons = veto_reasons or []
+
+        # 1. Hard Governance Veto Check
         if veto_triggered:
             return {
                 "decision": "REJECTED",
-                "final_score": -99.0,
-                "bull_score": bull_score,
-                "bear_score": bear_score,
-                "risk_score": risk_score,
-                "evidence_score": evidence_score,
-                "category_reason": "Hard risk veto triggered by Risk Officer / Governance Engine."
+                "bull_score": round(bull_score, 1),
+                "bear_score": round(bear_score, 1),
+                "risk_score": round(risk_score, 1),
+                "evidence_score": round(evidence_score, 1),
+                "evidence_quality": evidence_quality,
+                "evidence_agreement_score": evidence_agreement_score,
+                "category_reason": f"Hard governance veto triggered: {'; '.join(veto_reasons)}."
             }
 
-        final_score = round(
-            (self.w_bull * bull_score) -
-            (self.w_bear * bear_score) -
-            (self.w_risk * risk_score) +
-            (self.w_evi * evidence_score),
-            2
-        )
-
+        # 2. Low Quality Evidence Circuit Breaker
         quality_upper = evidence_quality.upper()
+        if quality_upper == "LOW":
+            return {
+                "decision": "HOLD",
+                "bull_score": round(bull_score, 1),
+                "bear_score": round(bear_score, 1),
+                "risk_score": round(risk_score, 1),
+                "evidence_score": round(evidence_score, 1),
+                "evidence_quality": evidence_quality,
+                "evidence_agreement_score": evidence_agreement_score,
+                "category_reason": "Evidence quality rated LOW by Evidence Prosecutor; capital deployment withheld until data is verified."
+            }
 
-        # Decision category mapping
-        if quality_upper == "LOW" and final_score >= 15.0:
-            decision = "WATCHLIST"
-            reason = "Promising upside signal, but evidence quality is LOW. Deferring to Watchlist until verified."
-        elif final_score >= 35.0:
-            decision = "STRONG BUY"
-            reason = f"High conviction consensus (Final Score {final_score:.1f} >= 35.0)."
-        elif final_score >= 25.0:
-            decision = "BUY"
-            reason = f"Positive risk-adjusted committee alignment (Final Score {final_score:.1f} >= 25.0)."
-        elif final_score >= 15.0:
-            decision = "WATCHLIST"
-            reason = f"Moderate score ({final_score:.1f}) qualifies for priority monitoring."
-        elif final_score >= 5.0:
-            decision = "HOLD"
-            reason = f"Neutral risk-reward tradeoff (Final Score {final_score:.1f})."
-        elif final_score >= -10.0:
-            decision = "REDUCE"
-            reason = f"Downside risks outbalance upside drivers (Final Score {final_score:.1f} < 5.0)."
-        else:
-            decision = "SELL"
-            reason = f"Severe bearish conviction or risk penalty (Final Score {final_score:.1f} < -10.0)."
+        # 3. Acute Signal Divergence Rule (ML < Threshold but Analogs >= 60%)
+        # Case in point: JPM (prob 48.5% < 60% hurdle, but analog win rate is 64%)
+        if model_probability < optimal_threshold and analog_win_rate >= 0.60:
+            return {
+                "decision": "WATCHLIST",
+                "bull_score": round(bull_score, 1),
+                "bear_score": round(bear_score, 1),
+                "risk_score": round(risk_score, 1),
+                "evidence_score": round(evidence_score, 1),
+                "evidence_quality": evidence_quality,
+                "evidence_agreement_score": evidence_agreement_score,
+                "category_reason": (
+                    f"Acute signal divergence: Historical analogs are favorable ({analog_win_rate:.0%} win rate), "
+                    f"but calibrated ML probability ({model_probability:.1%}) remains below the {optimal_threshold:.0%} conviction hurdle. "
+                    f"Deferred to Watchlist for directional confirmation."
+                )
+            }
 
+        # 4. High Conviction Strong Buy Rule
+        if (
+            model_probability >= optimal_threshold
+            and analog_win_rate >= 0.60
+            and ci_lower > -0.005  # CI doesn't exhibit severe negative tail
+            and risk_score <= 35.0
+            and evidence_agreement_score >= 0.75
+        ):
+            return {
+                "decision": "STRONG BUY",
+                "bull_score": round(bull_score, 1),
+                "bear_score": round(bear_score, 1),
+                "risk_score": round(risk_score, 1),
+                "evidence_score": round(evidence_score, 1),
+                "evidence_quality": evidence_quality,
+                "evidence_agreement_score": evidence_agreement_score,
+                "category_reason": (
+                    f"Strong consensus alignment: ML clears conviction threshold ({model_probability:.1%} >= {optimal_threshold:.0%}), "
+                    f"analog win rate is {analog_win_rate:.0%}, and risk score is low ({risk_score:.0f})."
+                )
+            }
+
+        # 5. Standard Buy Rule
+        if (
+            model_probability >= optimal_threshold
+            and (analog_win_rate >= 0.50 or bull_score > bear_score + 15)
+            and risk_score <= 45.0
+        ):
+            return {
+                "decision": "BUY",
+                "bull_score": round(bull_score, 1),
+                "bear_score": round(bear_score, 1),
+                "risk_score": round(risk_score, 1),
+                "evidence_score": round(evidence_score, 1),
+                "evidence_quality": evidence_quality,
+                "evidence_agreement_score": evidence_agreement_score,
+                "category_reason": (
+                    f"Constructive risk-adjusted setup: ML probability ({model_probability:.1%}) clears hurdle with supportive committee score."
+                )
+            }
+
+        # 6. Sell Rule
+        if (
+            model_probability < 0.45
+            and analog_win_rate <= 0.45
+            and bear_score >= 60.0
+        ):
+            return {
+                "decision": "SELL",
+                "bull_score": round(bull_score, 1),
+                "bear_score": round(bear_score, 1),
+                "risk_score": round(risk_score, 1),
+                "evidence_score": round(evidence_score, 1),
+                "evidence_quality": evidence_quality,
+                "evidence_agreement_score": evidence_agreement_score,
+                "category_reason": (
+                    f"Dominant bearish alignment: ML probability ({model_probability:.1%}) is low, "
+                    f"analog win rate is {analog_win_rate:.0%}, and bear arguments dominate."
+                )
+            }
+
+        # 7. Reduce Rule
+        if bear_score > bull_score + 15 or model_probability < 0.48:
+            return {
+                "decision": "REDUCE",
+                "bull_score": round(bull_score, 1),
+                "bear_score": round(bear_score, 1),
+                "risk_score": round(risk_score, 1),
+                "evidence_score": round(evidence_score, 1),
+                "evidence_quality": evidence_quality,
+                "evidence_agreement_score": evidence_agreement_score,
+                "category_reason": (
+                    f"Defensive risk posture: Downside risks ({bear_score:.0f}) outweigh bullish catalysts ({bull_score:.0f}); trimming exposure."
+                )
+            }
+
+        # 8. Hold Rule (Default Neutral Stance)
         return {
-            "decision": decision,
-            "final_score": final_score,
+            "decision": "HOLD",
             "bull_score": round(bull_score, 1),
             "bear_score": round(bear_score, 1),
             "risk_score": round(risk_score, 1),
             "evidence_score": round(evidence_score, 1),
-            "category_reason": reason
+            "evidence_quality": evidence_quality,
+            "evidence_agreement_score": evidence_agreement_score,
+            "category_reason": (
+                f"Neutral equilibrium: Model probability ({model_probability:.1%}) and analog win rate ({analog_win_rate:.0%}) "
+                f"present balanced risk-reward without directional edge."
+            )
         }
+
+    # Backward compatibility alias
+    calculate_score = evaluate_rules
+
 
     def compute_consensus(self, votes: List[Dict[str, Any]]) -> float:
         """

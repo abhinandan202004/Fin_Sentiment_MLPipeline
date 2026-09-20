@@ -36,16 +36,22 @@ class RiskOfficer:
         """
         Assesses holistic risk profile and determines veto actions or position limits.
         """
+        if hasattr(evidence, "to_dict"):
+            evidence = evidence.to_dict()
         evidence = evidence or {}
         current_portfolio = current_portfolio or {}
         sector_mapping = sector_mapping or {}
         risk_metrics = risk_metrics or {}
 
         args: List[str] = []
-        volatility = evidence.get("volatility", 0.25)
-        beta = risk_metrics.get("beta", 1.05)
-        var_95 = risk_metrics.get("var_95", 0.025)
-        hhi = risk_metrics.get("hhi", 0.20)
+        tech_sum = evidence.get("technical_summary", {})
+        quant_feat = evidence.get("quant_features", {})
+        risk_sum = evidence.get("risk_summary", {})
+
+        volatility = float(evidence.get("volatility", tech_sum.get("volatility", quant_feat.get("spy_volatility", 0.25))))
+        beta = float(risk_metrics.get("beta", risk_sum.get("beta", 1.05)))
+        var_95 = float(risk_metrics.get("var_95", risk_sum.get("var_95", 0.025)))
+        hhi = float(risk_metrics.get("hhi", risk_sum.get("hhi", 0.20)))
 
         # Run compliance & veto engine
         comp = self.gov.evaluate_compliance(
@@ -81,6 +87,9 @@ class RiskOfficer:
             risk_calc += 45.0
             for v in comp["violations"]:
                 args.append(f"VETO TRIGGERED: {v}")
+
+        if not args:
+            args.append(f"Asset risk profile conforms to mandate guardrails (volatility {volatility:.1%}, beta {beta:.2f}, 95% VaR {var_95:.2%}).")
 
         risk_score = round(min(max(risk_calc + 20.0, 5.0), 98.0), 1)
 

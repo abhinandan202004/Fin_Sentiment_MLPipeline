@@ -23,13 +23,44 @@ SCALER_PATH = ARTIFACTS_DIR / "faiss_scaler.pkl"
 
 ANALOG_FEATURE_COLS = [
     "avg_sentiment",
+    "sentiment_rank",
     "rsi",
     "macd",
     "volume_ratio",
     "event_impact",
     "spy_volatility",
-    "spy_return_5d",
+    "vix_level",
+    "sector_return_5d",
+    "bb_squeeze",
 ]
+
+TICKER_SECTOR_MAP = {
+    "NVDA": "Technology",
+    "AAPL": "Technology",
+    "MSFT": "Technology",
+    "GOOGL": "Communication Services",
+    "META": "Communication Services",
+    "AMZN": "Consumer Discretionary",
+    "TSLA": "Consumer Discretionary",
+    "NFLX": "Communication Services",
+    "AMD": "Technology",
+    "INTC": "Technology",
+    "CRM": "Technology",
+    "ORCL": "Technology",
+    "JPM": "Financials",
+    "BAC": "Financials",
+    "GS": "Financials",
+    "V": "Financials",
+    "UNH": "Healthcare",
+    "JNJ": "Healthcare",
+    "PFE": "Healthcare",
+    "XOM": "Energy",
+    "CVX": "Energy",
+    "WMT": "Consumer Staples",
+    "HD": "Consumer Discretionary",
+    "CAT": "Industrials",
+    "HON": "Industrials",
+}
 
 
 class AnalogIndexBuilder:
@@ -38,24 +69,30 @@ class AnalogIndexBuilder:
         self.index: Optional[faiss.IndexFlatL2] = None
         self.metadata: Dict[int, Dict[str, Any]] = {}
 
-    def build_index_from_dataset(self, csv_path: Optional[Path] = None) -> Tuple[faiss.IndexFlatL2, Dict[int, Dict[str, Any]]]:
-        if csv_path is None:
-            csv_path = DATA_DIR / "training_dataset.csv"
+    def build_index_from_dataset(self, csv_path: Optional[Path] = None) -> Tuple[faiss.IndexFlatL2, Dict[int, Dict[str, Any]], StandardScaler]:
+        from models.feature_store import load_feature_dataset
 
-        if not csv_path.exists():
-            raise FileNotFoundError(f"Training dataset not found at {csv_path}")
-
-        logger.info(f"Loading observations from {csv_path} for FAISS analog index...")
-        df = pd.read_csv(csv_path)
+        logger.info("Loading engineered feature dataset (30k rows, 25 tickers) for FAISS analog index...")
+        if csv_path is not None and csv_path.exists():
+            df = pd.read_csv(csv_path)
+            if "sentiment_rank" not in df.columns:
+                from models.feature_engineer import engineer_features
+                df = engineer_features(df)
+        else:
+            df = load_feature_dataset(run_feature_engineering=True)
 
         # Approximate event_impact from sentiment & return spikes if not explicit
         if "event_impact" not in df.columns:
-            # Map sentiment + volume breakout into event impact proxy
-            df["event_impact"] = np.clip(df["avg_sentiment"] * 0.7 + np.sign(df["return_1d"]) * 0.3, -1.0, 1.0)
+            ret_col = "return_1d" if "return_1d" in df.columns else "future_return_1d"
+            df["event_impact"] = np.clip(df["avg_sentiment"] * 0.7 + np.sign(df[ret_col]) * 0.3, -1.0, 1.0)
 
-        # Filter valid rows
-        cols_to_check = [c for c in ANALOG_FEATURE_COLS if c in df.columns]
-        clean_df = df.dropna(subset=cols_to_check + ["future_return_5d"]).copy().reset_index(drop=True)
+        # Ensure all analog feature columns exist and are clean
+        for col in ANALOG_FEATURE_COLS:
+            if col not in df.columns:
+                df[col] = 0.0
+
+        # Filter valid rows with clean future returns
+        clean_df = df.dropna(subset=ANALOG_FEATURE_COLS + ["future_return_5d"]).copy().reset_index(drop=True)
 
         features_raw = clean_df[ANALOG_FEATURE_COLS].values.astype(np.float32)
         scaled_features = self.scaler.fit_transform(features_raw)
@@ -68,26 +105,38 @@ class AnalogIndexBuilder:
         # Build Metadata dictionary
         self.metadata = {}
         for idx, row in clean_df.iterrows():
-            spy_vol = row.get("spy_volatility", 0.15)
-            if spy_vol < 0.14:
-                regime = "low_vol"
-            elif spy_vol > 0.22:
-                regime = "high_vol"
-            elif row.get("spy_return_5d", 0) > 0.01:
-                regime = "bull_trend"
-            else:
-                regime = "bear_trend"
+            vix = float(row.get("vix_level", 20.0))
+            spy_vol = float(row.get("spy_volatility", 0.15))
+            spy_5d = float(row.get("spy_return_5d", 0.0))
 
-            ev_label = "market_catalyst" if abs(row.get("event_impact", 0)) > 0.4 else "neutral_regime"
-            if row.get("event_impact", 0) > 0.4:
+            if vix > 25.0 or spy_vol > 0.22:
+                regime = "High Volatility"
+            elif vix < 15.0 and spy_vol < 0.14:
+                regime = "Low Volatility"
+            elif spy_5d > 0.01:
+                regime = "Bull"
+            elif spy_5d < -0.01:
+                regime = "Bear"
+            else:
+                regime = "Neutral"
+
+            ev_score = float(row.get("event_impact", 0.0))
+            if ev_score > 0.4:
                 ev_label = "earnings_beat_or_upgrade"
-            elif row.get("event_impact", 0) < -0.4:
+            elif ev_score < -0.4:
                 ev_label = "earnings_miss_or_headwind"
+            elif abs(ev_score) > 0.2:
+                ev_label = "market_catalyst"
+            else:
+                ev_label = "neutral_regime"
+
+            t = str(row.get("ticker", ""))
+            sec = TICKER_SECTOR_MAP.get(t, "Other")
 
             analog_case = AnalogCase(
                 vector_id=int(idx),
                 date=str(row.get("date", "")),
-                ticker=str(row.get("ticker", "")),
+                ticker=t,
                 event=ev_label,
                 return_1d=round(float(row.get("future_return_1d", 0.0)), 4),
                 return_5d=round(float(row.get("future_return_5d", 0.0)), 4),
@@ -96,6 +145,11 @@ class AnalogIndexBuilder:
                 rsi=round(float(row.get("rsi", 50.0)), 2),
                 volume_ratio=round(float(row.get("volume_ratio", 1.0)), 2),
                 market_regime=regime,
+                sector=sec,
+                vix_level=round(vix, 2),
+                sentiment_rank=round(float(row.get("sentiment_rank", 0.5)), 3),
+                sector_return_5d=round(float(row.get("sector_return_5d", 0.0)), 4),
+                bb_squeeze=round(float(row.get("bb_squeeze", 0.0)), 2),
             )
             self.metadata[int(idx)] = analog_case.to_dict()
 
@@ -128,6 +182,6 @@ class AnalogIndexBuilder:
 
 if __name__ == "__main__":
     builder = AnalogIndexBuilder()
-    idx, meta = builder.build_index_from_dataset()
+    idx, meta, scaler = builder.build_index_from_dataset()
     print(f"FAISS Index Total Vectors: {idx.ntotal}")
     print(f"Sample Metadata (Vector 0): {meta[0]}")

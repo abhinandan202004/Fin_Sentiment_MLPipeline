@@ -23,12 +23,9 @@ class TechnicalAgent:
         pass
 
     def analyze_ticker(self, ticker: str) -> Dict[str, Any]:
-        csv_path = DATA_DIR / "training_dataset.csv"
-        if not csv_path.exists():
-            raise FileNotFoundError(f"Training dataset not found at {csv_path}")
-
-        df = pd.read_csv(csv_path)
-        ticker_df = df[df["ticker"] == ticker].copy()
+        from models.feature_store import load_feature_dataset
+        df = load_feature_dataset()
+        ticker_df = df[df["ticker"] == ticker.upper()].copy()
         if ticker_df.empty:
             raise ValueError(f"No market records for {ticker}")
 
@@ -44,7 +41,27 @@ class TechnicalAgent:
         atr = float(latest.get("atr", 0.0))
         bb_pband = float(latest.get("bollinger_pband", 0.5))
 
-        # 1. RSI Condition
+        # Sprint 4.1 Enhanced Quantitative Features
+        vix_level = float(latest.get("vix_level", 20.0))
+        sector_return_5d = float(latest.get("sector_return_5d", 0.0))
+        rsi_rank = float(latest.get("rsi_rank", 0.50))
+        bb_squeeze = float(latest.get("bb_squeeze", 0.0))
+        spy_vol = float(latest.get("spy_volatility", 0.15))
+        spy_5d = float(latest.get("spy_return_5d", 0.0))
+
+        # Market Regime identification
+        if vix_level > 25.0 or spy_vol > 0.22:
+            market_regime = "High Volatility"
+        elif vix_level < 15.0 and spy_vol < 0.14:
+            market_regime = "Low Volatility"
+        elif spy_5d > 0.01:
+            market_regime = "Bull"
+        elif spy_5d < -0.01:
+            market_regime = "Bear"
+        else:
+            market_regime = "Neutral"
+
+        # 1. RSI Condition & Cross-sectional Rank
         if rsi >= 75:
             rsi_cond = "OVERBOUGHT"
         elif rsi <= 30:
@@ -73,19 +90,23 @@ class TechnicalAgent:
         # 4. Volume Activity
         vol_cond = "HIGH_BREAKOUT" if vol_ratio > 1.3 else ("LOW" if vol_ratio < 0.7 else "NORMAL")
 
-        # Synthesize technical narrative
+        # 5. Volatility Squeeze State
+        squeeze_state = "SQUEEZE_ACTIVE" if bb_squeeze > 0.5 else "VOLATILITY_EXPANDING"
+
+        # Synthesize enhanced technical narrative
         summary = (
-            f"Ticker exhibits a {trend.replace('_', ' ').title()} with EMA20 above EMA50. "
-            f"RSI sits at {rsi:.1f} ({rsi_cond}), indicating {rsi_cond.lower()} momentum. "
-            f"MACD difference of {macd_diff:+.3f} reflects {macd_cond.replace('_', ' ').lower()}. "
-            f"Volume ratio of {vol_ratio:.2f} indicates {vol_cond.lower()} institutional participation."
+            f"Technical setup indicates {trend.replace('_', ' ').title()} under a {market_regime} macro regime (VIX {vix_level:.1f}). "
+            f"RSI sits at {rsi:.1f} (Rank {rsi_rank:.0%} cross-sectional, {rsi_cond}), "
+            f"MACD difference of {macd_diff:+.3f} confirms {macd_cond.replace('_', ' ').lower()}. "
+            f"Bollinger Squeeze status is {squeeze_state}, while 5-day sector momentum is {sector_return_5d:+.2%}."
         )
 
         return {
-            "ticker": ticker,
+            "ticker": ticker.upper(),
             "date": str(latest.get("date", "")),
             "rsi": round(rsi, 2),
             "rsi_condition": rsi_cond,
+            "rsi_rank": round(rsi_rank, 3),
             "macd": round(macd, 3),
             "macd_signal": round(macd_signal, 3),
             "macd_diff": round(macd_diff, 3),
@@ -97,15 +118,21 @@ class TechnicalAgent:
             "volume_condition": vol_cond,
             "atr": round(atr, 2),
             "bollinger_pband": round(bb_pband, 3),
+            "bb_squeeze": round(bb_squeeze, 2),
+            "squeeze_state": squeeze_state,
+            "vix_level": round(vix_level, 2),
+            "market_regime": market_regime,
+            "sector_return_5d": round(sector_return_5d, 4),
             "summary": summary,
         }
 
 
 if __name__ == "__main__":
     ta = TechnicalAgent()
-    res = ta.analyze_ticker("NVDA")
-    print("\nTechnicalAgent Analysis for NVDA:")
-    print(f"RSI: {res['rsi']} ({res['rsi_condition']})")
-    print(f"MACD: {res['macd_condition']}")
-    print(f"Trend: {res['trend']}")
-    print(f"Summary: {res['summary']}")
+    for sym in ["NVDA", "AAPL", "JPM", "XOM"]:
+        res = ta.analyze_ticker(sym)
+        print(f"\nTechnicalAgent Analysis for {sym}:")
+        print(f"Regime: {res['market_regime']} | VIX: {res['vix_level']} | Sector 5d: {res['sector_return_5d']:+.2%}")
+        print(f"RSI: {res['rsi']} (Rank: {res['rsi_rank']:.0%}) | Squeeze: {res['squeeze_state']}")
+        print(f"Summary: {res['summary']}")
+

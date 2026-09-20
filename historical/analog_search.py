@@ -68,63 +68,87 @@ class HistoricalAnalogSearch:
         if not matched_cases:
             return {
                 "similar_cases": 0,
+                "sample_size": 0,
                 "success_rate": 0.50,
                 "median_return_5d": 0.0,
                 "avg_return_5d": 0.0,
+                "confidence_interval": [0.0, 0.0],
+                "market_regime_distribution": {},
+                "sector_distribution": {},
                 "top_matches": [],
             }
 
         returns_5d = [c["return_5d"] for c in matched_cases]
+        n = len(returns_5d)
         success_count = sum(1 for r in returns_5d if r > 0)
-        success_rate = success_count / len(returns_5d)
+        success_rate = success_count / n
         median_ret = float(np.median(returns_5d))
         avg_ret = float(np.mean(returns_5d))
+        std_ret = float(np.std(returns_5d, ddof=1)) if n > 1 else 0.0
+
+        # 95% Confidence Interval for mean 5-day return
+        se = std_ret / np.sqrt(n) if n > 0 else 0.0
+        ci_lower = round(avg_ret - 1.96 * se, 4)
+        ci_upper = round(avg_ret + 1.96 * se, 4)
+
+        # Distribution across Market Regimes
+        regime_counts = {}
+        for c in matched_cases:
+            reg = c.get("market_regime", "Neutral")
+            regime_counts[reg] = regime_counts.get(reg, 0) + 1
+        regime_dist = {k: round(v / n, 3) for k, v in regime_counts.items()}
+
+        # Distribution across Sectors
+        sector_counts = {}
+        for c in matched_cases:
+            sec = c.get("sector", "Other")
+            sector_counts[sec] = sector_counts.get(sec, 0) + 1
+        sector_dist = {k: round(v / n, 3) for k, v in sector_counts.items()}
 
         return {
-            "similar_cases": len(matched_cases),
+            "similar_cases": n,
+            "sample_size": n,
             "success_rate": round(float(success_rate), 4),
             "median_return_5d": round(float(median_ret), 4),
             "avg_return_5d": round(float(avg_ret), 4),
+            "confidence_interval": [ci_lower, ci_upper],
+            "market_regime_distribution": regime_dist,
+            "sector_distribution": sector_dist,
             "top_matches": matched_cases[:5],
         }
 
-    def search_by_ticker(self, ticker: str, top_k: int = 40) -> Dict[str, Any]:
+    def search_by_ticker(self, ticker: str, top_k: int = 50) -> Dict[str, Any]:
         """
-        Constructs the latest feature vector for ticker and runs analog search.
+        Constructs the latest 10-feature vector for ticker and runs analog search.
         """
-        csv_path = DATA_DIR / "training_dataset.csv"
-        if not csv_path.exists():
-            raise FileNotFoundError(f"Training dataset not found at {csv_path}")
-
-        df = pd.read_csv(csv_path)
-        ticker_df = df[df["ticker"] == ticker].copy()
+        from models.feature_store import load_feature_dataset
+        df = load_feature_dataset()
+        ticker_df = df[df["ticker"] == ticker.upper()].copy()
         if ticker_df.empty:
             raise ValueError(f"No historical records found for ticker {ticker}")
 
         latest_row = ticker_df.sort_values(by="date").iloc[-1]
 
-        # Extract 7 analog features
-        vec = np.array([[
-            float(latest_row.get("avg_sentiment", 0.0)),
-            float(latest_row.get("rsi", 50.0)),
-            float(latest_row.get("macd", 0.0)),
-            float(latest_row.get("volume_ratio", 1.0)),
-            float(latest_row.get("sentiment_ema_3", 0.0) * 0.8),
-            float(latest_row.get("spy_volatility", 0.15)),
-            float(latest_row.get("spy_return_5d", 0.0)),
-        ]])
+        # Extract 10 analog features exactly matching ANALOG_FEATURE_COLS
+        vec_values = []
+        for col in ANALOG_FEATURE_COLS:
+            val = latest_row.get(col, 0.0)
+            if pd.isna(val):
+                val = 0.0
+            vec_values.append(float(val))
 
+        vec = np.array([vec_values], dtype=np.float32)
         return self.find_analogs(vec, top_k=top_k)
 
 
 if __name__ == "__main__":
     searcher = HistoricalAnalogSearch.get_instance()
-    res = searcher.search_by_ticker("NVDA", top_k=42)
-    print("\nNVDA Historical Analog Search Results:")
-    print(f"Similar cases found : {res['similar_cases']}")
-    print(f"Success rate (5d >0): {res['success_rate']:.2%}")
-    print(f"Median 5-day return : {res['median_return_5d']:+.2%}")
-    print(f"Average 5-day return: {res['avg_return_5d']:+.2%}")
-    print("\nTop 3 historical case dates:")
-    for m in res["top_matches"][:3]:
-        print(f" - {m['date']} ({m['ticker']}): 5d Return = {m['return_5d']:+.2%}, Event = '{m['event']}', Distance = {m['distance']}")
+    for test_t in ["NVDA", "AAPL", "JPM", "XOM"]:
+        res = searcher.search_by_ticker(test_t, top_k=50)
+        print(f"\n--- Historical Analog Search: {test_t} ---")
+        print(f"Sample Size: {res['sample_size']} cases | Win Rate: {res['success_rate']:.1%}")
+        print(f"Median 5d: {res['median_return_5d']:+.2%} | Mean 5d: {res['avg_return_5d']:+.2%} | 95% CI: [{res['confidence_interval'][0]:+.2%}, {res['confidence_interval'][1]:+.2%}]")
+        print(f"Regime Dist: {res['market_regime_distribution']}")
+        print(f"Sector Dist: {res['sector_distribution']}")
+        top1 = res['top_matches'][0]
+        print(f"Top Precedent: {top1['date']} ({top1['ticker']}, {top1.get('sector', '')}) 5d: {top1['return_5d']:+.2%} dist: {top1['distance']}")

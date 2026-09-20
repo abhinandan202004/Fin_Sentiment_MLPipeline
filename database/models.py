@@ -236,11 +236,16 @@ class CommitteeDecision(Base):
     final_score = Column(Float, nullable=False, default=0.0)
 
     evidence_quality = Column(String(20), nullable=False, default="MEDIUM")
+    evidence_agreement_score = Column(Float, nullable=True, default=0.50)
+    model_probability = Column(Float, nullable=True)
+    analog_win_rate = Column(Float, nullable=True)
     governance_passed = Column(Boolean, nullable=False, default=True)
     cio_rationale = Column(Text, nullable=True)
 
     expected_return = Column(Float, nullable=True)
     realized_return = Column(Float, nullable=True)
+    realized_return_5d = Column(Float, nullable=True)
+    realized_return_20d = Column(Float, nullable=True)
     correct_direction = Column(Boolean, nullable=True)
 
     def __repr__(self):

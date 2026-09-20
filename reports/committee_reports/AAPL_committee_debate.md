@@ -1,15 +1,15 @@
-# Investment Committee Debate Report: `NVDA`
-**Convened:** 2026-09-15 21:45:00 UTC  
+# Investment Committee Debate Report: `AAPL`
+**Convened:** 2026-09-15 21:45:40 UTC  
 **Macro Market Regime:** `Bull`  
 **Decision Status:** **HOLD** (Allocation: **2.8%**)
 
 ---
 
 ## 1. Research Summary
-- **Asset Under Review:** `NVDA` (Technology)
-- **ML Directional Probability:** 49.7% (Optimal Conviction Hurdle: 60.0%)
+- **Asset Under Review:** `AAPL` (Technology)
+- **ML Directional Probability:** 48.4% (Optimal Conviction Hurdle: 60.0%)
 - **FinBERT News Sentiment:** +0.00
-- **Historical Analog Win Rate:** 42.0% (50 situations from 30k FAISS index)
+- **Historical Analog Win Rate:** 44.0% (50 situations from 30k FAISS index)
 - **Technical RSI (14):** 50.0 | **Annual Volatility:** 25.0%
 
 ---
@@ -23,16 +23,16 @@
   - **Technical Setup:** `NEUTRAL`
   - **Fundamentals / Sentiment:** `NEUTRAL`
 - **Adversarial Audit Findings:**
-- Model Hurdle Failure: Calibrated ML probability (49.7%) fails to cross optimal threshold (60.0%) by 10.3%.
-- Statistical Insignificance: 95% Confidence Interval [-2.41%, +0.11%] crosses zero, confirming high tail variance.
+- Model Hurdle Failure: Calibrated ML probability (48.4%) fails to cross optimal threshold (60.0%) by 11.6%.
+- Statistical Insignificance: 95% Confidence Interval [-1.44%, +1.17%] crosses zero, confirming high tail variance.
 
 ---
 
 ## 3. Bull Thesis
 - **Agent:** Bull Analyst (Historical Accuracy: 61%)
-- **Stance:** `HOLD` (Score: **39.9 / 100**, Confidence: 46%)
+- **Stance:** `HOLD` (Score: **40.2 / 100**, Confidence: 46%)
 - **Core Upside Arguments:**
-- Quantitative catalyst attributions: Positive impact from return_5d (+0.002), spy_return_1d (+0.002)
+- Quantitative catalyst attributions: Positive impact from spy_return_1d (+0.002), return_5d (+0.001)
 - Sector peer momentum: +1.23% 5-day outperformance indicates institutional sector rotation
 - Volatility squeeze detected: Bollinger compression signals imminent explosive upward breakout
 
@@ -42,9 +42,9 @@
 - **Agent:** Bear Analyst (Historical Accuracy: 58%)
 - **Stance:** `REDUCE` (Score: **52.7 / 100**, Confidence: 68%)
 - **Core Downside Vulnerabilities:**
-- Model Hurdle Failure: Calibrated probability (49.7%) fails to cross the 60.0% conviction threshold
-- Negative analog skew: Historical setups experienced a 58% failure rate across comparable market states
-- Analog tail risk: 95% Confidence Interval [-2.41%, +0.11%] crosses zero into negative return territory
+- Model Hurdle Failure: Calibrated probability (48.4%) fails to cross the 60.0% conviction threshold
+- Negative analog skew: Historical setups experienced a 56% failure rate across comparable market states
+- Analog tail risk: 95% Confidence Interval [-1.44%, +1.17%] crosses zero into negative return territory
 - Predictive feature drag: Quant model heavily penalized by vix_level (-0.004), spy_volatility (-0.003)
 
 ---
@@ -92,11 +92,11 @@
 ## 9. Chief Investment Officer (CIO) Verdict
 - **Authoritative Decision:** **`HOLD`**
 - **Governance Resolution:** **Explainable Rule-Based Governance Hierarchy**
-  - Model Conviction Check: 49.7% vs 60.0% Hurdle (BELOW THRESHOLD)
-  - Historical Analog Win Rate: 42.0% (50 matched cases from 30,025 FAISS index)
+  - Model Conviction Check: 48.4% vs 60.0% Hurdle (BELOW THRESHOLD)
+  - Historical Analog Win Rate: 44.0% (50 matched cases from 30,025 FAISS index)
   - Cross-Stream Evidence Agreement: 75%
   - Risk Officer Posture: `LOW` (Veto Enforced: False)
 - **Final Target Allocation:** **2.8%**
 
 ### Executive Rationale:
-> CIO VERDICT: MAINTAIN HOLD. Neutral equilibrium: Model probability (49.7%) and analog win rate (42%) present balanced risk-reward without directional edge. Preserving existing allocation (2.8%) with balanced risk-reward.
+> CIO VERDICT: MAINTAIN HOLD. Neutral equilibrium: Model probability (48.4%) and analog win rate (44%) present balanced risk-reward without directional edge. Preserving existing allocation (2.8%) with balanced risk-reward.

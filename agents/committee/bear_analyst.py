@@ -30,65 +30,65 @@ class BearAnalyst:
         evidence = evidence or {}
         args: List[str] = []
 
-        ml_prob = evidence.get("ml_prob", 0.55)
-        sentiment = evidence.get("sentiment_score", 0.10)
-        analog_rate = evidence.get("analog_win_rate", 0.55)
-        rsi = evidence.get("rsi", 62.0)
-        volatility = evidence.get("volatility", 0.28)
-        macd_diff = evidence.get("macd_diff", 0.10)
+        ml_prob = float(evidence.get("probability", evidence.get("ml_prob", 0.50)))
+        threshold = float(evidence.get("threshold", evidence.get("optimal_threshold", 0.55)))
 
-        # 1. Technical Exhaustion & Overbought Metrics
+        analogs = evidence.get("historical_analogs", evidence.get("analogs", {}))
+        analog_rate = float(analogs.get("success_rate", evidence.get("analog_win_rate", 0.50)))
+        ci = analogs.get("confidence_interval", evidence.get("confidence_interval", [0.0, 0.0]))
+
+        tech = evidence.get("technical_summary", {})
+        rsi = float(tech.get("rsi", evidence.get("rsi", 50.0)))
+        volatility = float(evidence.get("volatility", 0.25))
+        macd_diff = float(tech.get("macd_diff", evidence.get("macd_diff", 0.0)))
+
+        quant = evidence.get("quant_features", {})
+        vix_level = float(quant.get("vix_level", tech.get("vix_level", 20.0)))
+        top_neg_shap = evidence.get("top_shap_drivers", {}).get("negative", [])
+
+        # 1. Model Conviction Shortfall
+        if ml_prob < threshold:
+            args.append(f"Model Hurdle Failure: Calibrated probability ({ml_prob:.1%}) fails to cross the {threshold:.1%} conviction threshold")
+        elif ml_prob < 0.50:
+            args.append(f"Bearish ML drift: Negative directional probability ({ml_prob:.1%}) signals baseline capital loss")
+
+        # 2. Historical Analog Failure Precedent & CI Risk
+        if analog_rate < 0.50:
+            args.append(f"Negative analog skew: Historical setups experienced a {1.0 - analog_rate:.0%} failure rate across comparable market states")
+        if len(ci) == 2 and ci[0] <= 0.0:
+            args.append(f"Analog tail risk: 95% Confidence Interval [{ci[0]:+.2%}, {ci[1]:+.2%}] crosses zero into negative return territory")
+
+        # 3. Top Headwind Drivers (TreeSHAP)
+        if top_neg_shap:
+            neg_str = ", ".join(top_neg_shap[:2])
+            args.append(f"Predictive feature drag: Quant model heavily penalized by {neg_str}")
+
+        # 4. Technical Momentum Exhaustion & Volatility Headwinds
         if rsi >= 70.0:
-            args.append(f"Severely overbought momentum (RSI at {rsi:.1f} > 70.0), high mean-reversion risk")
-        elif rsi >= 65.0:
-            args.append(f"Elevated technical levels (RSI at {rsi:.1f}), upside momentum slowing")
-
-        if macd_diff < 0:
-            args.append("MACD histogram indicates weakening bullish momentum and negative divergence")
-
-        # 2. Volatility & Risk Drag
-        if volatility >= 0.35:
-            args.append(f"Extremely high annualized volatility ({volatility:.1%}) elevates downside tail risk")
-        elif volatility >= 0.25:
-            args.append(f"Above-average asset volatility ({volatility:.1%}) introduces execution friction")
-
-        # 3. Weak or Fragile ML/Sentiment Support
-        if ml_prob < 0.55:
-            args.append(f"Weak ML forward edge ({ml_prob:.0%} probability fails to clear high-conviction hurdle)")
-
-        if sentiment < 0.0:
-            args.append(f"Negative news sentiment drag (FinBERT score: {sentiment:+.2f})")
-        elif sentiment < 0.20:
-            args.append("Tepid news sentiment provides insufficient institutional impulse")
-
-        # 4. Analog Downside Precedent
-        if analog_rate < 0.55:
-            args.append(f"Historical analog setups experienced {1.0 - analog_rate:.0%} failure rate")
-
-        # 5. Macro Regime Headwinds
-        if regime in ("Bear", "High Volatility"):
-            args.append(f"Macro headwind: {regime} regime threatens multiple contraction")
-        elif regime == "Sideways":
-            args.append("Choppy sideways macro backdrop limits trend extension")
+            args.append(f"Overbought technical exhaustion: RSI at {rsi:.1f} signals acute mean-reversion risk")
+        if macd_diff < 0.0:
+            args.append("MACD structural divergence: Negative histogram spread indicates momentum decay")
+        if vix_level > 22.0:
+            args.append(f"Elevated macro volatility: VIX at {vix_level:.1f} threatens multiple contraction and risk-off liquidations")
 
         if not args:
-            args.append("Valuation multiples remain stretched relative to broader market averages.")
+            args.append("Valuation multiples and macro uncertainty limit directional upside.")
 
         # Compute quantitative bear_score (0 - 100)
-        bear_calc = 0.0
-        if rsi > 65:
-            bear_calc += (rsi - 65) * 2.5
-        if volatility > 0.25:
-            bear_calc += (volatility - 0.25) * 120.0
-        if ml_prob < 0.60:
-            bear_calc += (0.60 - ml_prob) * 100.0
-        if sentiment < 0.20:
-            bear_calc += max(0.20 - sentiment, 0.0) * 50.0
-        if regime in ("Bear", "High Volatility"):
-            bear_calc += 25.0
+        bear_calc = 20.0
+        if ml_prob < threshold:
+            bear_calc += (threshold - ml_prob) * 120.0
+        if analog_rate < 0.55:
+            bear_calc += (0.55 - analog_rate) * 80.0
+        if len(ci) == 2 and ci[0] <= 0.0:
+            bear_calc += 10.0
+        if vix_level > 20.0:
+            bear_calc += (vix_level - 20.0) * 1.5
+        if rsi > 65.0:
+            bear_calc += (rsi - 65.0) * 2.0
 
-        bear_score = round(min(max(bear_calc + 15.0, 5.0), 95.0), 1)
-        confidence = round(min(max(bear_score / 100.0 + 0.20, 0.35), 0.90), 2)
+        bear_score = round(min(max(bear_calc, 10.0), 95.0), 1)
+        confidence = round(min(max((bear_score / 100.0) + 0.15, 0.35), 0.90), 2)
 
         stance = "SELL" if bear_score >= 65.0 else ("REDUCE" if bear_score >= 45.0 else "HOLD")
 
@@ -100,6 +100,7 @@ class BearAnalyst:
             "bear_score": bear_score,
             "arguments": args
         }
+
 
 
 if __name__ == "__main__":

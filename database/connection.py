@@ -47,5 +47,16 @@ def init_db():
         if "spy_return_1d" not in existing_cols or "vix_level" not in existing_cols:
             logger.info("Migrating training_features table schema (dropping legacy table)...")
             database.models.TrainingFeature.__table__.drop(bind=engine, checkfirst=True)
+    if "committee_decisions" in inspector.get_table_names():
+        existing_cols = {col["name"] for col in inspector.get_columns("committee_decisions")}
+        for col_name in ["model_probability", "analog_win_rate", "evidence_agreement_score", "realized_return_5d", "realized_return_20d"]:
+            if col_name not in existing_cols:
+                logger.info(f"Adding missing column {col_name} to committee_decisions...")
+                try:
+                    with engine.connect() as conn:
+                        conn.execute(text(f"ALTER TABLE committee_decisions ADD COLUMN {col_name} FLOAT;"))
+                        conn.commit()
+                except Exception as e:
+                    logger.warning(f"Could not add column {col_name}: {e}")
     Base.metadata.create_all(bind=engine)
     logger.info("Database schema verified and tables initialized.")

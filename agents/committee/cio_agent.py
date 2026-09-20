@@ -55,98 +55,113 @@ class ChiefInvestmentOfficer:
         ]
         consensus = self.scorer.compute_consensus(votes)
 
-        # 2. Extract constituent scores
+        # 2. Extract constituent scores & Evidence metrics
         bull_score = bull_case.get("bull_score", 50.0)
         bear_score = bear_case.get("bear_score", 30.0)
         risk_score = risk_case.get("risk_score", 20.0)
         evidence_score = prosecutor_case.get("evidence_score", 80.0)
         evidence_quality = prosecutor_case.get("evidence_quality", "HIGH")
+        agreement_score = prosecutor_case.get("evidence_agreement_score", 0.50)
         veto_triggered = risk_case.get("veto_triggered", False)
+        veto_reasons = risk_case.get("veto_reasons", [])
 
-        # 3. Calculate weighted score
-        score_data = self.scorer.calculate_score(
+        ml_prob = float(evidence.get("probability", evidence.get("ml_prob", 0.50)))
+        threshold = float(evidence.get("threshold", evidence.get("optimal_threshold", 0.55)))
+        analogs = evidence.get("historical_analogs", evidence.get("analogs", {}))
+        analog_win_rate = float(analogs.get("success_rate", evidence.get("analog_win_rate", 0.50)))
+        ci = analogs.get("confidence_interval", evidence.get("confidence_interval", [0.0, 0.0]))
+        ci_lower = ci[0] if len(ci) > 0 else 0.0
+
+        # 3. Evaluate Rule-Based Governance Hierarchy
+        rule_eval = self.scorer.evaluate_rules(
             bull_score=bull_score,
             bear_score=bear_score,
             risk_score=risk_score,
             evidence_score=evidence_score,
+            evidence_quality=evidence_quality,
+            evidence_agreement_score=agreement_score,
+            model_probability=ml_prob,
+            optimal_threshold=threshold,
+            analog_win_rate=analog_win_rate,
+            ci_lower=ci_lower,
             veto_triggered=veto_triggered,
-            evidence_quality=evidence_quality
+            veto_reasons=veto_reasons
         )
-        decision = score_data["decision"]
-        final_score = score_data["final_score"]
+        decision = rule_eval["decision"]
+        category_reason = rule_eval["category_reason"]
 
-        # 4. Calibrate confidence
-        ml_conf = evidence.get("ml_prob", bull_case.get("confidence", 0.65))
-        analog_conf = evidence.get("analog_win_rate", 0.65)
+        # 4. Calibrate Confidence
         calibrated_conf = self.scorer.calibrate_confidence(
-            ml_confidence=ml_conf,
-            analog_confidence=analog_conf,
+            ml_confidence=ml_prob,
+            analog_confidence=analog_win_rate,
             consensus_score=consensus,
             evidence_quality=evidence_quality
         )
 
-        # 5. Final Allocation determination
+        # 5. Position Sizing
         if decision in ("REJECTED", "SELL"):
             final_allocation = 0.0
         elif decision == "WATCHLIST":
             final_allocation = 0.0
         elif decision == "HOLD":
             final_allocation = pm_case.get("allocation", 0.05)
-        else:
+        elif decision == "REDUCE":
+            final_allocation = max(0.0, pm_case.get("allocation", 0.05) * 0.5)
+        elif decision == "STRONG BUY":
+            final_allocation = max(pm_case.get("allocation", 0.10), 0.12)
+        else:  # BUY
             final_allocation = pm_case.get("allocation", 0.08)
 
-        # 6. Author CIO Rationale
-        rationale_paragraphs = []
+        # 6. Author Institutional CIO Rationale
+        rationale_parts = []
         if decision == "REJECTED":
-            reasons = "; ".join(risk_case.get("veto_reasons", ["Risk limits breached"]))
-            rationale_paragraphs.append(
-                f"CIO VERDICT: PROPOSAL REJECTED. The Risk Officer exercised institutional veto power due to: {reasons}. "
-                f"Capital preservation overrides directional upside."
+            rationale_parts.append(
+                f"CIO VERDICT: PROPOSAL REJECTED. Institutional veto enforced: {category_reason}"
             )
         elif decision == "WATCHLIST":
-            rationale_paragraphs.append(
-                f"CIO VERDICT: PLACED ON PRIORITY WATCHLIST. While underlying indicators are constructive (Score: {final_score:.1f}), "
-                f"the Evidence Prosecutor flagged data issues ({'; '.join(prosecutor_case.get('issues', ['Incomplete evidence']))}). "
-                f"Capital allocation deferred until additional verification emerges."
+            rationale_parts.append(
+                f"CIO VERDICT: PLACED ON WATCHLIST. {category_reason} "
+                f"Analog precedents show a {analog_win_rate:.0%} success rate, but ML model probability remains below threshold ({ml_prob:.1%} < {threshold:.1%}). "
+                f"Confidence interval [{ci[0]:+.2%}, {ci[1]:+.2%}] crosses zero, requiring evidence confirmation before deploying capital."
             )
         elif decision in ("STRONG BUY", "BUY"):
-            top_bull = bull_case.get("arguments", ["Positive directional edge"])[0]
-            top_bear = bear_case.get("arguments", ["Standard volatility risks"])[0]
-            rationale_paragraphs.append(
+            top_bull = bull_case.get("arguments", ["Robust quantitative tailwinds"])[0]
+            rationale_parts.append(
                 f"CIO VERDICT: {decision} APPROVED with {calibrated_conf:.0%} calibrated confidence. "
-                f"The Committee resolved in favor of capital deployment ({final_allocation:.1%} target allocation). "
-                f"Primary thesis: {top_bull}. Countervailing headwind monitored: {top_bear}. "
-                f"Risk assessment passed with balanced HHI and appropriate volatility buffers."
+                f"Committee resolved in favor of capital deployment ({final_allocation:.1%} allocation). "
+                f"Primary thesis: {top_bull}. Risk score is acceptable ({risk_score:.0f}/100) with {agreement_score:.0%} cross-stream agreement."
             )
         elif decision == "REDUCE":
-            rationale_paragraphs.append(
-                f"CIO VERDICT: REDUCE ALLOCATION. Bearish arguments outbalance current expected return (Score: {final_score:.1f}). "
-                f"Trimming exposure to protect portfolio capital."
+            rationale_parts.append(
+                f"CIO VERDICT: REDUCE ALLOCATION. {category_reason} "
+                f"Trimming exposure to {final_allocation:.1%} to mitigate drawdown risks."
             )
         else:  # HOLD
-            rationale_paragraphs.append(
-                f"CIO VERDICT: MAINTAIN HOLD. Neutral risk-reward tradeoff observed with {consensus:.0%} committee consensus. "
-                f"Preserving existing position without active delta rebalancing."
+            rationale_parts.append(
+                f"CIO VERDICT: MAINTAIN HOLD. {category_reason} "
+                f"Preserving existing allocation ({final_allocation:.1%}) with balanced risk-reward."
             )
 
-        cio_rationale = " ".join(rationale_paragraphs)
+        cio_rationale = " ".join(rationale_parts)
 
         return {
-            "agent": "CIO",
             "ticker": ticker.upper(),
             "decision": decision,
-            "confidence": calibrated_conf,
-            "consensus_score": consensus,
-            "allocation": final_allocation,
-            "final_score": final_score,
-            "bull_score": bull_score,
-            "bear_score": bear_score,
-            "risk_score": risk_score,
-            "evidence_score": evidence_score,
+            "confidence": round(calibrated_conf, 2),
+            "bull_score": int(bull_score),
+            "bear_score": int(bear_score),
+            "risk_score": int(risk_score),
+            "evidence_score": int(evidence_score),
+            "analog_win_rate": round(analog_win_rate, 2),
+            "model_probability": round(ml_prob, 3),
             "evidence_quality": evidence_quality,
+            "evidence_agreement_score": round(agreement_score, 2),
+            "consensus_score": round(consensus, 2),
+            "allocation": round(final_allocation, 3),
             "governance_passed": not veto_triggered,
             "cio_rationale": cio_rationale
         }
+
 
 
 if __name__ == "__main__":
