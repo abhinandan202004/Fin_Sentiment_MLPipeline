@@ -274,3 +274,70 @@ class CommitteeVote(Base):
     def __repr__(self):
         return f"<CommitteeVote {self.agent_name} for {self.ticker}: {self.stance} ({self.confidence:.2f})>"
 
+
+class OpportunityHistory(Base):
+    __tablename__ = "opportunity_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    discovery_date = Column(Date, default=lambda: datetime.now(timezone.utc).date(), index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    score = Column(Float, nullable=False)  # 0 - 100
+    confidence = Column(Float, nullable=False)  # 0.0 - 1.0
+    ml_probability = Column(Float, nullable=True)
+    analog_win_rate = Column(Float, nullable=True)
+    sentiment_rank = Column(Float, nullable=True)
+    sector_momentum = Column(Float, nullable=True)
+    event_impact = Column(Float, nullable=True)
+    market_regime = Column(String(30), nullable=True)
+    catalyst_summary = Column(Text, nullable=True)
+    trend_theme = Column(String(50), nullable=True)
+    priority = Column(BigInteger, default=1)
+    status = Column(String(20), default="ACTIVE")  # ACTIVE, RESOLVED, EXPIRED
+
+    # Multi-horizon outcome tracking fields
+    return_5d = Column(Float, nullable=True)
+    return_20d = Column(Float, nullable=True)
+    return_60d = Column(Float, nullable=True)
+    max_drawdown = Column(Float, nullable=True)
+    success = Column(Boolean, nullable=True)
+    resolved_date = Column(Date, nullable=True)
+
+    def __repr__(self):
+        return f"<OpportunityHistory {self.ticker}: Score={self.score:.1f} (Pri={self.priority})>"
+
+
+class TrendHistory(Base):
+    __tablename__ = "trend_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    detected_date = Column(Date, default=lambda: datetime.now(timezone.utc).date(), index=True)
+    theme = Column(String(50), nullable=False, index=True)  # AI, Cybersecurity, Cloud, etc.
+    mention_growth = Column(Float, nullable=False, default=0.0)  # % growth in mentions
+    sentiment_trend = Column(Float, nullable=False, default=0.0)  # Sentiment polarity change
+    news_volume = Column(BigInteger, nullable=False, default=0)
+    sector_strength = Column(Float, nullable=False, default=0.0)
+    leading_tickers = Column(JSON, nullable=True)  # ["NVDA", "MSFT", ...]
+
+    def __repr__(self):
+        return f"<TrendHistory {self.theme}: Growth={self.mention_growth:+.1%}>"
+
+
+class CatalystHistory(Base):
+    __tablename__ = "catalyst_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    detected_date = Column(Date, default=lambda: datetime.now(timezone.utc).date(), index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    catalyst_type = Column(String(50), nullable=False)  # Earnings, Product Launches, etc.
+    description = Column(Text, nullable=False)
+    expected_impact = Column(Float, nullable=False, default=0.0)  # -1.0 to +1.0
+    event_date = Column(Date, nullable=True)
+    source_url = Column(Text, nullable=True)
+
+    def __repr__(self):
+        return f"<CatalystHistory {self.ticker}: {self.catalyst_type} (Impact={self.expected_impact:+.2f})>"
+
+
