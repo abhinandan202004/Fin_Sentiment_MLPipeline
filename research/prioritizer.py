@@ -144,5 +144,6 @@ if __name__ == "__main__":
     print(f"{'Priority':<10} {'Ticker':<8} {'Score':<8} {'Base':<8} {'CatBoost':<10} {'Trend':<25} {'Action'}")
     print("-" * 80)
     for q in res["top_priority"]:
-        print(f"#{q['priority']:<9} {q['ticker']:<8} {q['composite_score']:<8.1f} {q['base_opportunity_score']:<8.1f} {q['catalyst_boost']:+<10.1f} {q['trend_theme']:<25} {q['action']}")
+        cat_str = f"{q['catalyst_boost']:+.1f}"
+        print(f"#{q['priority']:<9} {q['ticker']:<8} {q['composite_score']:<8.1f} {q['base_opportunity_score']:<8.1f} {cat_str:<10} {q['trend_theme']:<25} {q['action']}")
     print("=" * 80)

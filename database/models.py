@@ -341,3 +341,264 @@ class CatalystHistory(Base):
         return f"<CatalystHistory {self.ticker}: {self.catalyst_type} (Impact={self.expected_impact:+.2f})>"
 
 
+# =====================================================================
+# SPRINT 9 — AUTONOMOUS EVALUATION & ADAPTIVE INTELLIGENCE MODELS
+# =====================================================================
+
+class PredictionOutcome(Base):
+    __tablename__ = "prediction_outcomes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    prediction_id = Column(String(50), nullable=True, index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    prediction_date = Column(DateTime, nullable=False, index=True)
+    predicted_probability = Column(Float, nullable=False)
+    threshold = Column(Float, nullable=False)
+    predicted_direction = Column(String(10), nullable=False)
+
+    actual_return_1d = Column(Float, nullable=True)
+    actual_return_5d = Column(Float, nullable=True)
+    actual_return_10d = Column(Float, nullable=True)
+    actual_return_20d = Column(Float, nullable=True)
+    actual_return_60d = Column(Float, nullable=True)
+
+    actual_direction = Column(String(10), nullable=True)
+
+    correct_1d = Column(Boolean, nullable=True)
+    correct_5d = Column(Boolean, nullable=True)
+    correct_10d = Column(Boolean, nullable=True)
+    correct_20d = Column(Boolean, nullable=True)
+    correct_60d = Column(Boolean, nullable=True)
+
+    brier_score = Column(Float, nullable=True)
+
+    market_regime = Column(String(50), nullable=True)
+    sector = Column(String(50), nullable=True)
+
+    model_version = Column(String(50), nullable=True, default="SPRINT_9_BASELINE")
+    feature_version = Column(String(50), nullable=True, default="v2.0_43_features")
+    threshold_version = Column(String(50), nullable=True, default="calibrated_0.60")
+    calibration_version = Column(String(50), nullable=True, default="raw_uncalibrated")
+
+    resolved_date = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("idx_pred_outcome_ticker_date", "ticker", "prediction_date"),
+    )
+
+    def __repr__(self):
+        return f"<PredictionOutcome {self.ticker} {self.prediction_date.strftime('%Y-%m-%d') if self.prediction_date else ''}: prob={self.predicted_probability:.3f}>"
+
+
+class AgentDecisionRecord(Base):
+    __tablename__ = "agent_decision_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    agent_name = Column(String(50), nullable=False, index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    stance = Column(String(20), nullable=False)
+    confidence = Column(Float, nullable=False)
+    predicted_probability = Column(Float, nullable=True)
+    predicted_direction = Column(String(10), nullable=True)
+
+    market_regime = Column(String(50), nullable=True)
+    sector = Column(String(50), nullable=True)
+
+    committee_decision_id = Column(String(50), nullable=True, index=True)
+
+    model_version = Column(String(50), nullable=True, default="SPRINT_9_BASELINE")
+    committee_version = Column(String(50), nullable=True, default="v1.0_baseline")
+
+    def __repr__(self):
+        return f"<AgentDecisionRecord {self.agent_name} {self.ticker}: {self.stance} ({self.confidence:.2f})>"
+
+
+class AgentEvaluationRecord(Base):
+    __tablename__ = "agent_evaluation_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    evaluation_date = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    agent_name = Column(String(50), nullable=False, index=True)
+    sample_size = Column(BigInteger, nullable=False, default=0)
+
+    directional_accuracy = Column(Float, nullable=True)
+    hit_rate = Column(Float, nullable=True)
+    brier_score = Column(Float, nullable=True)
+    ece = Column(Float, nullable=True)
+
+    average_return = Column(Float, nullable=True)
+    median_return = Column(Float, nullable=True)
+    sharpe_ratio = Column(Float, nullable=True)
+    sortino_ratio = Column(Float, nullable=True)
+    max_drawdown = Column(Float, nullable=True)
+
+    avg_drawdown_on_miss = Column(Float, nullable=True)
+
+    regime_breakdown = Column(JSON, nullable=True)
+    sector_breakdown = Column(JSON, nullable=True)
+    confidence_breakdown = Column(JSON, nullable=True)
+
+    def __repr__(self):
+        return f"<AgentEvaluationRecord {self.agent_name}: n={self.sample_size} hit_rate={self.hit_rate:.1%}>"
+
+
+class CommitteeEvaluationRecord(Base):
+    __tablename__ = "committee_evaluation_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    evaluation_date = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    decisions_evaluated = Column(BigInteger, nullable=False, default=0)
+    accuracy = Column(Float, nullable=True)
+    hit_rate = Column(Float, nullable=True)
+
+    avg_return_5d = Column(Float, nullable=True)
+    avg_return_20d = Column(Float, nullable=True)
+    avg_return_60d = Column(Float, nullable=True)
+
+    max_drawdown = Column(Float, nullable=True)
+    sharpe_ratio = Column(Float, nullable=True)
+    sortino_ratio = Column(Float, nullable=True)
+    profit_factor = Column(Float, nullable=True)
+
+    edge_vs_ml = Column(Float, nullable=True)
+    edge_vs_consensus = Column(Float, nullable=True)
+    edge_vs_benchmark = Column(Float, nullable=True)
+
+    vetoes_evaluated = Column(BigInteger, nullable=False, default=0)
+    vetoes_prevented_losses = Column(BigInteger, nullable=False, default=0)
+
+    committee_version = Column(String(50), nullable=True, default="SPRINT_9_BASELINE")
+
+    def __repr__(self):
+        return f"<CommitteeEvaluationRecord eval_date={self.evaluation_date} n={self.decisions_evaluated}>"
+
+
+class OpportunityOutcome(Base):
+    __tablename__ = "opportunity_outcomes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    opportunity_id = Column(String(50), nullable=True, index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    discovery_date = Column(DateTime, nullable=False, index=True)
+    opportunity_score = Column(Float, nullable=False)
+
+    return_1d = Column(Float, nullable=True)
+    return_5d = Column(Float, nullable=True)
+    return_10d = Column(Float, nullable=True)
+    return_20d = Column(Float, nullable=True)
+    return_60d = Column(Float, nullable=True)
+
+    success = Column(Boolean, nullable=True)
+
+    market_regime = Column(String(50), nullable=True)
+    sector = Column(String(50), nullable=True)
+
+    def __repr__(self):
+        return f"<OpportunityOutcome {self.ticker}: score={self.opportunity_score:.1f} success={self.success}>"
+
+
+class PaperTradingPosition(Base):
+    __tablename__ = "paper_trading_positions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    entry_date = Column(DateTime, nullable=False, index=True)
+    ticker = Column(String(20), nullable=False, index=True)
+    direction = Column(String(10), nullable=False, default="BUY")
+    entry_price = Column(Float, nullable=False)
+    shares = Column(Float, nullable=False)
+
+    current_price = Column(Float, nullable=False)
+
+    gross_pnl = Column(Float, default=0.0)
+    commission = Column(Float, default=0.0)
+    slippage_cost = Column(Float, default=0.0)
+    spread_cost = Column(Float, default=0.0)
+    total_transaction_cost = Column(Float, default=0.0)
+    net_pnl = Column(Float, default=0.0)
+
+    unrealized_pnl = Column(Float, default=0.0)
+    realized_pnl = Column(Float, default=0.0)
+
+    exit_date = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="OPEN")  # OPEN, CLOSED
+
+    def __repr__(self):
+        return f"<PaperTradingPosition {self.ticker} shares={self.shares:.1f} net_pnl={self.net_pnl:.2f}>"
+
+
+class PaperTradingSnapshot(Base):
+    __tablename__ = "paper_trading_snapshots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    snapshot_date = Column(DateTime, nullable=False, index=True)
+
+    total_equity = Column(Float, nullable=False)
+    cash = Column(Float, nullable=False)
+    positions_value = Column(Float, nullable=False)
+
+    daily_return = Column(Float, default=0.0)
+    cumulative_return = Column(Float, default=0.0)
+
+    benchmark_return = Column(Float, default=0.0)
+    alpha = Column(Float, default=0.0)
+
+    max_drawdown = Column(Float, default=0.0)
+    sharpe_ratio = Column(Float, nullable=True)
+    sortino_ratio = Column(Float, nullable=True)
+
+    def __repr__(self):
+        return f"<PaperTradingSnapshot date={self.snapshot_date} equity={self.total_equity:.2f} alpha={self.alpha:.2%}>"
+
+
+class ModelCalibrationRecord(Base):
+    __tablename__ = "model_calibration_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    calibration_date = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    method = Column(String(50), nullable=False)  # Platt, Isotonic
+    ece_before = Column(Float, nullable=False)
+    ece_after = Column(Float, nullable=False)
+    brier_before = Column(Float, nullable=False)
+    brier_after = Column(Float, nullable=False)
+
+    optimal_threshold = Column(Float, nullable=True)
+
+    parameters = Column(JSON, nullable=True)
+
+    model_version = Column(String(50), nullable=True, default="SPRINT_9_BASELINE")
+    calibration_version = Column(String(50), nullable=True, default="calibrated_v1.0")
+
+    def __repr__(self):
+        return f"<ModelCalibrationRecord {self.method} ECE: {self.ece_before:.4f} -> {self.ece_after:.4f}>"
+
+
+class EvaluationSnapshot(Base):
+    __tablename__ = "evaluation_snapshots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    evaluation_window = Column(String(100), nullable=False)
+
+    model_version = Column(String(50), nullable=True, default="SPRINT_9_BASELINE")
+    feature_version = Column(String(50), nullable=True, default="v2.0_43_features")
+    threshold_version = Column(String(50), nullable=True, default="calibrated_0.60")
+    calibration_version = Column(String(50), nullable=True, default="calibrated_v1.0")
+    committee_version = Column(String(50), nullable=True, default="adaptive_v1.0")
+    opportunity_version = Column(String(50), nullable=True, default="adaptive_v1.0")
+
+    model_metrics_json = Column(JSON, nullable=True)
+    agent_metrics_json = Column(JSON, nullable=True)
+    committee_metrics_json = Column(JSON, nullable=True)
+    calibration_metrics_json = Column(JSON, nullable=True)
+    adaptive_weights_json = Column(JSON, nullable=True)
+    opportunity_weights_json = Column(JSON, nullable=True)
+    paper_trading_metrics_json = Column(JSON, nullable=True)
+
+    def __repr__(self):
+        return f"<EvaluationSnapshot window={self.evaluation_window} time={self.timestamp}>"
+
+
+
