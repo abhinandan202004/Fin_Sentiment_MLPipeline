@@ -188,8 +188,9 @@ def run_temporal_calibration_experiment(df: pd.DataFrame, features: List[str],
     ece_iso = compute_ece(y_eval, p_iso)
     brier_iso = compute_brier_score(y_eval, p_iso)
 
-    opt_th_platt = calibrator.optimize_threshold(y_eval, p_platt)
-    opt_th_iso = calibrator.optimize_threshold(y_eval, p_iso)
+    # Optimize threshold strictly on the CALIBRATION set to prevent evaluation peeking
+    opt_th_platt = calibrator.optimize_threshold(y_cal, calibrator.calibrate_platt(prob_cal))
+    opt_th_iso = calibrator.optimize_threshold(y_cal, calibrator.calibrate_isotonic(prob_cal))
 
     # Select best calibration method
     if ece_iso < ece_platt and ece_iso < ece_raw:

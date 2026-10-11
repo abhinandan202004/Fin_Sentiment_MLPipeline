@@ -36,3 +36,23 @@ class TransactionCostModel:
         # Turnover represents two-sided buy/sell reallocation
         cost_dollars = turnover * total_capital * self.cost_rate
         return cost_dollars
+
+    def compute_trade_cost(self, trade_value: float, side: str = "BUY") -> Dict[str, float]:
+        """
+        Deducts transaction costs once per applicable side.
+        Friction breakdown:
+        - Commission: 5 bps (0.0005)
+        - Slippage: 2 bps (0.0002)
+        - Spread / Exchange fees: 3 bps (0.0003)
+        Total one-way: 10 bps (0.0010)
+        """
+        comm = trade_value * 0.0005
+        slip = trade_value * 0.0002
+        spread = trade_value * 0.0003
+        total = comm + slip + spread
+        return {
+            "commission": comm,
+            "slippage": slip,
+            "spread": spread,
+            "total_cost": total,
+        }

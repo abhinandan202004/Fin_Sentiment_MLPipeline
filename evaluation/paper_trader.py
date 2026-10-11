@@ -52,6 +52,7 @@ from evaluation.metrics import (
     compute_alpha
 )
 from evaluation.outcome_tracker import OutcomeTracker
+from execution.strategy_decision import StrategyDecisionEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("PaperTrader")
@@ -60,12 +61,21 @@ logger = logging.getLogger("PaperTrader")
 class PaperTrader:
     """Institutional paper trading simulator with multi-asset risk constraints and friction."""
 
-    def __init__(self, initial_capital: float = 1_000_000.0, session=None):
+    def __init__(
+        self,
+        initial_capital: float = 1_000_000.0,
+        session=None,
+        strategy_mode: str = "HEURISTIC_PREFILTER",
+        currency: str = "USD"
+    ):
         self.initial_capital = float(initial_capital)
         self.cash = float(initial_capital)
+        self.strategy_mode = strategy_mode
+        self.currency = currency
         self._external_session = session
         self.outcome_tracker = OutcomeTracker(session=session)
         self.cost_model = TransactionCostModel(cost_rate=0.0010)
+        self.strategy_engine = StrategyDecisionEngine(min_ml_prob=0.52, opportunity_hurdle=50.0)
 
         # Constraints
         self.MAX_SINGLE_POS = 0.15
@@ -113,41 +123,45 @@ class PaperTrader:
             unique_dates = sorted(candidates_by_date.keys())
             logger.info(f"Starting Paper Trading walk-forward: {len(unique_dates)} trading sessions, Capital: INR {self.initial_capital:,.2f}")
 
-            spy_bars = session.query(MarketData).filter(MarketData.ticker == "AAPL").all()  # Proxy benchmark
-            spy_map = {b.date: float(b.close) for b in spy_bars}
-            initial_spy = None
+            # Ingest true SPY benchmark returns from TrainingFeature.spy_return_1d
+            spy_map = {}
+            spy_cum = 100.0
+            if unique_dates:
+                spy_map[unique_dates[0]] = spy_cum
+                for i in range(1, len(unique_dates)):
+                    d = unique_dates[i]
+                    day_cands = candidates_by_date.get(d, [])
+                    d_spy_ret = next((c.spy_return_1d for c in day_cands if c.spy_return_1d is not None), 0.0)
+                    spy_cum *= (1.0 + (d_spy_ret or 0.0))
+                    spy_map[d] = spy_cum
+            initial_spy = 100.0
 
             peak_equity = self.initial_capital
 
-            for cur_date in unique_dates:
-                # 1. Update prices of existing open positions
-                pos_value = 0.0
-                sector_exposure = {}
+            cost_model = TransactionCostModel()
 
+            for cur_date in unique_dates:
+                # 1. Update prices and evaluate exit conditions for open positions
                 for ticker, pos in list(self.open_positions.items()):
                     outcomes = self.outcome_tracker.get_forward_outcomes(ticker, cur_date)
                     cur_price = outcomes["entry_price"] if outcomes else pos["current_price"]
                     pos["current_price"] = cur_price
                     pos["unrealized_pnl"] = (cur_price - pos["entry_price"]) * pos["shares"]
-                    val = pos["shares"] * cur_price
-                    pos_value += val
 
-                    sec = sector_map.get(ticker, "Technology")
-                    sector_exposure[sec] = sector_exposure.get(sec, 0.0) + val
-
-                    # Exit conditions: 10 sessions held or target +5% / stop -3%
+                    # Exit conditions: 14 calendar days (approx 10 sessions) held or target +5% / stop -3%
                     days_held = (cur_date - pos["entry_date"]).days
                     ret = (cur_price - pos["entry_price"]) / pos["entry_price"]
                     if days_held >= 14 or ret >= 0.05 or ret <= -0.03:
                         # Close position
                         proceeds = pos["shares"] * cur_price
-                        comm = proceeds * 0.0005
-                        slip = proceeds * 0.0002
-                        spread = proceeds * 0.0003
-                        total_cost = comm + slip + spread
-                        net_pnl = ((cur_price - pos["entry_price"]) * pos["shares"]) - (pos["entry_cost"] + total_cost)
+                        exit_costs = cost_model.compute_trade_cost(proceeds, side="SELL")
+                        comm = exit_costs["commission"]
+                        slip = exit_costs["slippage"]
+                        spread = exit_costs["spread"]
+                        total_exit_cost = exit_costs["total_cost"]
+                        net_pnl = ((cur_price - pos["entry_price"]) * pos["shares"]) - (pos["entry_cost"] + total_exit_cost)
 
-                        self.cash += (proceeds - total_cost)
+                        self.cash += (proceeds - total_exit_cost)
                         pos.update({
                             "exit_date": cur_date,
                             "exit_price": cur_price,
@@ -155,7 +169,7 @@ class PaperTrader:
                             "commission": pos["commission"] + comm,
                             "slippage_cost": pos["slippage_cost"] + slip,
                             "spread_cost": pos["spread_cost"] + spread,
-                            "total_transaction_cost": pos["entry_cost"] + total_cost,
+                            "total_transaction_cost": pos["entry_cost"] + total_exit_cost,
                             "net_pnl": net_pnl,
                             "realized_pnl": net_pnl,
                             "unrealized_pnl": 0.0,
@@ -164,13 +178,49 @@ class PaperTrader:
                         self.closed_positions.append(pos)
                         del self.open_positions[ticker]
 
+                # Mark-to-market positions value of remaining open positions
+                pos_value = sum(p["shares"] * p["current_price"] for p in self.open_positions.values())
+                sector_exposure = {}
+                for ticker, pos in self.open_positions.items():
+                    sec = sector_map.get(ticker, "Technology")
+                    sector_exposure[sec] = sector_exposure.get(sec, 0.0) + (pos["shares"] * pos["current_price"])
+
                 # 2. Check for new candidate allocations on cur_date
                 total_equity = self.cash + pos_value
-                available_for_new_pos = total_equity * (1.0 - self.MIN_CASH) - pos_value
+                available_for_new_pos = max(0.0, total_equity * (1.0 - self.MIN_CASH) - pos_value)
 
                 daily_cands = candidates_by_date[cur_date]
-                # Filter for bullish candidate signals (target == 1, non-overbought RSI, non-negative sentiment)
-                qualified = [c for c in daily_cands if (c.target == 1 and (c.rsi is None or c.rsi < 70) and (c.avg_sentiment is None or c.avg_sentiment >= 0.0))]
+                if self.strategy_mode == "ML_COMMITTEE":
+                    # Evaluate candidates dynamically through StrategyDecisionEngine (ML probability + Opportunity Ranking + Risk)
+                    portfolio_state = {
+                        "total_equity": total_equity,
+                        "cash": self.cash,
+                        "peak_equity": peak_equity,
+                        "open_positions": self.open_positions
+                    }
+                    approved_entries = []
+                    for c in daily_cands:
+                        if c.ticker in self.open_positions:
+                            continue
+                        feats = {f: getattr(c, f, 0.0) or 0.0 for f in self.strategy_engine.feature_list}
+                        outcomes = self.outcome_tracker.get_forward_outcomes(c.ticker, cur_date)
+                        entry_p = outcomes["entry_price"] if outcomes and outcomes.get("entry_price") else 100.0
+                        dec = self.strategy_engine.evaluate_candidate(
+                            ticker=c.ticker,
+                            features=feats,
+                            decision_date=cur_date,
+                            portfolio_state=portfolio_state,
+                            market_price=entry_p,
+                            sector=sector_map.get(c.ticker, "Technology")
+                        )
+                        if dec.decision == "BUY":
+                            approved_entries.append((c, dec.opportunity_score))
+                    # Rank approved candidates by multi-factor opportunity score
+                    approved_entries.sort(key=lambda x: x[1], reverse=True)
+                    qualified = [c for (c, score) in approved_entries]
+                else:
+                    # Baseline heuristic prefilter (Sprint 9.2 benchmark mode)
+                    qualified = [c for c in daily_cands if ((c.rsi is None or c.rsi < 70) and (c.avg_sentiment is None or c.avg_sentiment >= 0.0))]
 
                 for cand in qualified:
                     if cand.ticker in self.open_positions:
@@ -196,10 +246,11 @@ class PaperTrader:
                         continue
 
                     shares = target_alloc / entry_p
-                    comm = target_alloc * 0.0005
-                    slip = target_alloc * 0.0002
-                    spread = target_alloc * 0.0003
-                    total_entry_cost = comm + slip + spread
+                    entry_costs = cost_model.compute_trade_cost(target_alloc, side="BUY")
+                    comm = entry_costs["commission"]
+                    slip = entry_costs["slippage"]
+                    spread = entry_costs["spread"]
+                    total_entry_cost = entry_costs["total_cost"]
 
                     if self.cash < (target_alloc + total_entry_cost):
                         continue
@@ -227,10 +278,11 @@ class PaperTrader:
                         "status": "OPEN"
                     }
 
-                # 3. Compute Snapshot Metrics
+                # 3. Compute Snapshot Metrics from final marked-to-market positions
+                pos_value = sum(p["shares"] * p["current_price"] for p in self.open_positions.values())
                 total_equity = self.cash + pos_value
                 peak_equity = max(peak_equity, total_equity)
-                cur_dd = (peak_equity - total_equity) / peak_equity
+                cur_dd = (peak_equity - total_equity) / peak_equity if peak_equity > 0 else 0.0
 
                 prev_eq = self.daily_snapshots[-1]["total_equity"] if self.daily_snapshots else self.initial_capital
                 daily_ret = (total_equity - prev_eq) / prev_eq

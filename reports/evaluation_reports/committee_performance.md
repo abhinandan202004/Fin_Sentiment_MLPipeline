@@ -1,5 +1,5 @@
 # SPRINT 9 — INVESTMENT COMMITTEE EVALUATION & COUNTERFACTUAL ANALYSIS
-**Evaluation Date:** 2026-10-06  
+**Evaluation Date:** 2026-10-09  
 **Decisions Evaluated:** 60 across 25 universe tickers  
 **Transaction Friction Applied:** 10 bps roundtrip (5 bps commission + 2 bps slippage + spread)  
 
@@ -10,10 +10,10 @@
 | Strategy | Annualized Return | Sharpe Ratio | Sortino Ratio | Max DD | Profit Factor | Hit Rate | Trades | Alpha vs SPY |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Committee Governance** | `+0.00%` | `0.00` | `0.00` | `0.00%` | `0.00` | `0.0%` | 0 | `+0.00%` |
-| **ML-Only Strategy** | `+0.61%` | `0.16` | `0.33` | `19.69%` | `1.14` | `42.9%` | 21 | `-6.42%` |
-| **Opportunity-Only** | `+19.29%` | `0.75` | `2.27` | `10.33%` | `2.61` | `54.5%` | 11 | `+9.54%` |
-| **Equal-Weight Consensus** | `+0.61%` | `0.16` | `0.33` | `19.69%` | `1.14` | `42.9%` | 21 | `-6.42%` |
-| **Benchmark (SPY Buy & Hold)** | `+42.51%` | `1.63` | `2.62` | `20.68%` | `1.72` | `58.3%` | 60 | `+0.00%` |
+| **ML-Only Strategy** | `+0.61%` | `0.16` | `0.33` | `19.69%` | `1.14` | `42.9%` | 21 | `+3.74%` |
+| **Opportunity-Only** | `+19.29%` | `0.75` | `2.27` | `10.33%` | `2.61` | `54.5%` | 11 | `+21.74%` |
+| **Equal-Weight Consensus** | `+0.61%` | `0.16` | `0.33` | `19.69%` | `1.14` | `42.9%` | 21 | `+3.74%` |
+| **Benchmark (SPY Buy & Hold)** | `+19.35%` | `1.50` | `2.71` | `13.56%` | `1.67` | `56.7%` | 60 | `+0.00%` |
 
 ---
 
@@ -23,7 +23,7 @@
 | :--- | :---: | :--- | :---: |
 | **Edge vs ML-Only** | `-0.61%` | Pure ML Classifier Trades | **UNDERPERFORMED** |
 | **Edge vs Consensus** | `-0.61%` | Equal-Weighted Agent Consensus | **UNDERPERFORMED** |
-| **Edge vs Benchmark** | `-42.51%` | S&P 500 Buy & Hold | **UNDERPERFORMED** |
+| **Edge vs Benchmark** | `-19.35%` | S&P 500 Buy & Hold | **UNDERPERFORMED** |
 
 ---
 

@@ -1,5 +1,5 @@
 # SPRINT 9 — MASTER AUTONOMOUS EVALUATION & ADAPTIVE INTELLIGENCE REPORT
-**Report Date:** 2026-10-06 20:09:12 UTC  
+**Report Date:** 2026-10-09 20:13:23 UTC  
 **Evaluation Window:** `2025-09-23 to 2026-09-08`  
 **Model & Architecture Baseline:** `SPRINT_9_BASELINE` | `v2.0_43_features`  
 **Governance & Committee Architecture:** `adaptive_v1.0`  
@@ -13,9 +13,9 @@
 
 ### The Answer:
 **YES, with crucial institutional nuances.**
-1. **Predictive Accuracy vs Economic Value:** Pure classification accuracy (47.4%) understates utility due to market noise. When filtered through high-conviction hurdle thresholds, the model delivers an **87.5% 5-day hit rate** with a **28.34 profit factor**.
-2. **Economic Alpha Execution:** In the walk-forward paper portfolio across 167 trading sessions, the system produced a **net return of +118.44%** vs **SPY benchmark of +20.25%**, generating **+98.19% cumulative alpha** after deducting full transaction friction (₹62,402.47 INR).
-3. **Governance & Veto Protection:** The Investment Committee veto engine successfully prevented capital loss on **12 of 21 rejected trades (57.1% accuracy)**, avoiding **+41.16%** in downside drawdown.
+1. **Predictive Accuracy vs Economic Value:** Pure classification accuracy (47.4%) reflects high noise in daily returns. When filtered through high-conviction hurdle thresholds (>= 0.60), the model achieves a **87.5% hit rate**, representing **7 correct out of 8 qualifying predictions** (selection rate: 0.13%). Full out-of-sample balanced accuracy is **50.1%**, compared to the naive majority-class baseline of **52.7%**.
+2. **Economic Alpha Execution:** In the walk-forward paper portfolio across 167 trading sessions, the system produced a **net return of +18.13%** vs true **SPY benchmark of +14.12%**, generating **+4.00% cumulative alpha** after deducting full roundtrip transaction friction (₹58,029.33 INR).
+3. **Governance & Veto Protection:** The Investment Committee veto engine prevented capital loss on **12 of 21 rejected trades (57.1% accuracy)**. Avoided downside losses totaled **+41.16%**, while missed upside gains totaled **+46.74%**, resulting in a net counterfactual impact of **-5.59%**.
 4. **Adaptive Integrity (Rule 4 Compliance):** In strict adherence to non-negotiable Rule 4, the platform reported honest calibrations: raw baseline probability was preserved over synthetic distortions, and committee weights were adjusted to promote risk mitigation agents based on out-of-sample evidence.
 
 ---
@@ -24,16 +24,18 @@
 
 | Metric | Out-of-Sample Result | Benchmark / Threshold | Status |
 | :--- | :---: | :---: | :---: |
-| **Sample Size** | 6005 observations | 25 Universe Tickers | **VALIDATED** |
-| **Accuracy** | `47.4%` | > 45.0% | **PASS** |
+| **Total Test Observations** | 6005 observations | 25 Universe Tickers | **VALIDATED** |
+| **Threshold Qualifying Trades ($N$)**| 8 observations | Selection Rate: 0.13% | **DISCLOSED** |
+| **Overall Accuracy** | `47.4%` | Naive Majority: 52.7% | **MEASURED** |
+| **Balanced Accuracy** | `50.1%` | Symmetric True Rates | **MEASURED** |
+| **Hit Rate at Threshold** | `87.5%` (7 / 8) | Threshold >= 0.60 | **PASS** |
 | **ROC-AUC** | `0.5062` | > 0.5000 | **PASS** |
 | **F1 Score** | `0.0044` | Baseline Calibrated | **PASS** |
 | **Brier Score** | `0.2510` | < 0.2600 | **PASS** |
 | **Expected Calibration Error (ECE)** | `0.0357` | < 0.1000 | **PASS** |
 | **Spearman Rank IC (Mean)** | `-0.0075` | Statistically Tested | **MEASURED** |
-| **5-Day Strategy Hit Rate** | `87.5%` | > 52.0% | **PASS** |
-| **Sharpe Ratio (Annualized)** | `0.45` | > 0.00 | **PASS** |
-| **Sortino Ratio (Annualized)** | `5.60` | > 1.00 | **PASS** |
+| **Annualized Sharpe Ratio** | `0.45` | > 0.00 | **PASS** |
+| **Annualized Sortino Ratio** | `5.60` | > 1.00 | **PASS** |
 | **Maximum Drawdown** | `1.46%` | < 25.0% | **PASS** |
 | **Profit Factor** | `28.34` | > 1.20 | **PASS** |
 
@@ -61,13 +63,15 @@ Evaluates Committee Governance approval against 4 alternative strategies over id
 | **Committee Governance** | `+0.00%` | `0.00` | `0.00` | `0.00%` | `0.00` | `0.0%` |
 | **ML-Only Strategy** | `+0.61%` | `0.16` | `0.33` | `19.69%` | `1.14` | `42.9%` |
 | **Opportunity-Only** | `+19.29%` | `0.75` | `2.27` | `10.33%` | `2.61` | `54.5%` |
-| **SPY Benchmark Buy & Hold** | `+42.51%` | `1.63` | `2.62` | `20.68%` | `1.72` | `58.3%` |
+| **SPY Benchmark Buy & Hold** | `+19.35%` | `1.50` | `2.71` | `13.56%` | `1.67` | `56.7%` |
 
 ### Committee Veto Audit Trail
 - **Vetoes Audited:** 21
 - **Losses Successfully Prevented:** 12
-- **Veto Hit Rate:** `57.1%`
-- **Capital Drawdown Avoided:** `+41.16%`
+- **Veto Loss-Prevention Accuracy:** `57.1%`
+- **Avoided Downside Losses:** `+41.16%`
+- **Missed Opportunity Gains:** `+46.74%`
+- **Net Counterfactual Economic Impact:** `-5.59%`
 
 ---
 
@@ -76,7 +80,7 @@ Evaluates Committee Governance approval against 4 alternative strategies over id
 | Calibration Method | Out-of-Sample ECE | Brier Score | Optimal Threshold | Selected Status |
 | :--- | :---: | :---: | :---: | :---: |
 | **Raw Probabilities (Baseline)** | `0.0355` | `0.2510` | `0.550` | **CHAMPION (Preserved)** |
-| **Platt Scaling** | `0.0677` | `0.2592` | `0.400` | Rejected (Distorted Tails) |
+| **Platt Scaling** | `0.0677` | `0.2592` | `0.450` | Rejected (Distorted Tails) |
 | **Isotonic Regression** | `0.1058` | `0.2726` | `0.400` | Rejected (Step Artifacts) |
 
 > **Audit Finding:** In strict compliance with Rule 2 & Rule 4, post-hoc calibration was not forced onto downstream predictions because raw probabilities demonstrated superior empirical calibration on the unseen test fold.
@@ -122,16 +126,16 @@ Evaluates Committee Governance approval against 4 alternative strategies over id
 | Portfolio Metric | Realized Value (INR) |
 | :--- | :---: |
 | **Initial Capital** | INR 1,000,000.00 |
-| **Final Portfolio Equity** | INR 2,184,392.11 |
-| **Total Net Cumulative Return** | `+118.44%` |
-| **Benchmark (SPY) Return** | `+20.25%` |
-| **Net Cumulative Alpha** | `+98.19%` |
-| **Sharpe Ratio** | `1.71` |
-| **Sortino Ratio** | `3.02` |
-| **Maximum Drawdown** | `41.23%` |
-| **Profit Factor** | `4.58` |
-| **Closed Trades Executed** | 256 (72.3% win rate) |
-| **Total Transaction Friction Deducted** | INR 62,402.47 (10 bps roundtrip) |
+| **Final Portfolio Equity** | INR 1,181,270.22 |
+| **Total Net Cumulative Return** | `+18.13%` |
+| **Benchmark (SPY) Return** | `+14.12%` |
+| **Net Cumulative Alpha** | `+4.00%` |
+| **Sharpe Ratio** | `1.59` |
+| **Sortino Ratio** | `2.35` |
+| **Maximum Drawdown** | `14.02%` |
+| **Profit Factor** | `1.31` |
+| **Closed Trades Executed** | 292 (50.3% win rate) |
+| **Total Transaction Friction Deducted** | INR 58,029.33 (10 bps roundtrip) |
 
 ---
 

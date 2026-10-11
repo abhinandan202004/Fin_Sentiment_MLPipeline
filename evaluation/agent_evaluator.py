@@ -278,10 +278,10 @@ class AgentEvaluator:
 
                 for d in decs:
                     outcomes = self.outcome_tracker.get_forward_outcomes(d.ticker, d.timestamp)
-                    if not outcomes or outcomes["available_forward_sessions"] < 5:
+                    if not outcomes or outcomes.get("available_forward_sessions", 0) < 5:
                         continue
 
-                    r5 = outcomes["return_5d"]
+                    r5 = outcomes.get("return_5d")
                     if r5 is None:
                         continue
 
@@ -296,7 +296,7 @@ class AgentEvaluator:
                     true_labels.append(1 if r5 > 0 else 0)
                     prob_conf.append(d.confidence)
 
-                    if not is_correct:
+                    if not is_correct and outcomes.get("max_drawdown_20d") is not None:
                         miss_drawdowns.append(abs(outcomes["max_drawdown_20d"]))
 
                     # Sector breakdown

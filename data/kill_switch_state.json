@@ -1,0 +1,194 @@
+{
+  "active": false,
+  "reason": "Deactivated: Reset test state",
+  "activated_at": null,
+  "activated_by": null,
+  "history": [
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:52:04.690048+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:52:04.701563+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:52:04.714192+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:52:04.723001+00:00"
+    },
+    {
+      "action": "ACTIVATE",
+      "reason": "Market anomaly detected",
+      "by": "RISK_OFFICER",
+      "timestamp": "2026-10-09T20:52:04.734764+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Anomaly cleared",
+      "by": "CIO",
+      "timestamp": "2026-10-09T20:52:04.748109+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:52:04.765975+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:53:34.745951+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:53:34.754989+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:53:34.766871+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:53:34.779107+00:00"
+    },
+    {
+      "action": "ACTIVATE",
+      "reason": "Market anomaly detected",
+      "by": "RISK_OFFICER",
+      "timestamp": "2026-10-09T20:53:34.789362+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Anomaly cleared",
+      "by": "CIO",
+      "timestamp": "2026-10-09T20:53:34.800450+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:53:34.810861+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:56:14.576179+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:56:14.588621+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:56:14.599773+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:56:14.609592+00:00"
+    },
+    {
+      "action": "ACTIVATE",
+      "reason": "Market anomaly detected",
+      "by": "RISK_OFFICER",
+      "timestamp": "2026-10-09T20:56:14.620699+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Anomaly cleared",
+      "by": "CIO",
+      "timestamp": "2026-10-09T20:56:14.632201+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-09T20:56:14.640585+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Validation suite setup",
+      "by": "RELEASE_GATE",
+      "timestamp": "2026-10-10T15:16:56.321602+00:00"
+    },
+    {
+      "action": "ACTIVATE",
+      "reason": "Automated safety drill",
+      "by": "RELEASE_GATE",
+      "timestamp": "2026-10-10T15:16:56.349856+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Safety drill complete",
+      "by": "RELEASE_GATE",
+      "timestamp": "2026-10-10T15:16:56.385447+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-10T15:16:59.453437+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-10T15:16:59.471023+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-10T15:16:59.488744+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-10T15:16:59.506646+00:00"
+    },
+    {
+      "action": "ACTIVATE",
+      "reason": "Market anomaly detected",
+      "by": "RISK_OFFICER",
+      "timestamp": "2026-10-10T15:16:59.521913+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Anomaly cleared",
+      "by": "CIO",
+      "timestamp": "2026-10-10T15:16:59.537131+00:00"
+    },
+    {
+      "action": "DEACTIVATE",
+      "reason": "Reset test state",
+      "by": "TEST_SUITE",
+      "timestamp": "2026-10-10T15:16:59.555247+00:00"
+    }
+  ]
+}

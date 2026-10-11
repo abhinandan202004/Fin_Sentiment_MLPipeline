@@ -70,5 +70,15 @@ def init_db():
                         conn.commit()
                 except Exception as e:
                     logger.warning(f"Could not add column {col_name}: {e}")
+    if "prediction_outcomes" in inspector.get_table_names():
+        po_cols = {col["name"] for col in inspector.get_columns("prediction_outcomes")}
+        if "status" not in po_cols or "horizon_status" not in po_cols:
+            logger.info("Migrating prediction_outcomes table schema...")
+            database.models.PredictionOutcome.__table__.drop(bind=engine, checkfirst=True)
+    if "opportunity_outcomes" in inspector.get_table_names():
+        oo_cols = {col["name"] for col in inspector.get_columns("opportunity_outcomes")}
+        if "status" not in oo_cols or "horizon_status" not in oo_cols:
+            logger.info("Migrating opportunity_outcomes table schema...")
+            database.models.OpportunityOutcome.__table__.drop(bind=engine, checkfirst=True)
     Base.metadata.create_all(bind=engine)
     logger.info("Database schema verified and tables initialized.")

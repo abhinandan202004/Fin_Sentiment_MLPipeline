@@ -12,6 +12,7 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 from scipy import stats
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     precision_score,
     recall_score,
     f1_score,
@@ -380,10 +381,20 @@ def evaluate_predictions_full(y_true: Union[List, np.ndarray],
     logl = compute_log_loss(y_t, y_p)
     ece = compute_ece(y_t, y_p)
 
+    bal_acc = float(balanced_accuracy_score(y_t, preds)) if len(np.unique(y_t)) > 1 else float(acc)
+    n_qualifying = int(np.sum(preds == 1))
+    n_correct = int(np.sum((preds == 1) & (y_t == 1)))
+    maj_base = float(max(np.mean(y_t == 1), np.mean(y_t == 0))) if len(y_t) > 0 else 0.50
+
     out = {
         "sample_size": len(y_t),
         "threshold": threshold,
+        "threshold_sample_size": n_qualifying,
+        "threshold_hit_count": n_correct,
+        "selection_rate": float(n_qualifying / len(y_t)) if len(y_t) > 0 else 0.0,
         "accuracy": acc,
+        "balanced_accuracy": bal_acc,
+        "majority_baseline": maj_base,
         "precision": clf_metrics["precision"],
         "recall": clf_metrics["recall"],
         "f1": clf_metrics["f1"],

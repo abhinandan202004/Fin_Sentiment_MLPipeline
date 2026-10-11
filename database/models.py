@@ -354,7 +354,12 @@ class PredictionOutcome(Base):
     prediction_date = Column(DateTime, nullable=False, index=True)
     predicted_probability = Column(Float, nullable=False)
     threshold = Column(Float, nullable=False)
-    predicted_direction = Column(String(10), nullable=False)
+    predicted_direction = Column(String(10), nullable=False, default="BUY")
+    status = Column(String(20), nullable=False, default="PENDING", index=True)  # PENDING, RESOLVED, UNRESOLVABLE
+    entry_price = Column(Float, nullable=True)
+    exit_price_5d = Column(Float, nullable=True)
+    max_drawdown = Column(Float, nullable=True)
+    horizon_status = Column(JSON, nullable=True)  # {"1d": "RESOLVED", "5d": "PENDING", ...}
 
     actual_return_1d = Column(Float, nullable=True)
     actual_return_5d = Column(Float, nullable=True)
@@ -483,6 +488,10 @@ class OpportunityOutcome(Base):
     ticker = Column(String(20), nullable=False, index=True)
     discovery_date = Column(DateTime, nullable=False, index=True)
     opportunity_score = Column(Float, nullable=False)
+    status = Column(String(20), nullable=False, default="PENDING", index=True)  # PENDING, RESOLVED, UNRESOLVABLE
+    entry_price = Column(Float, nullable=True)
+    max_drawdown = Column(Float, nullable=True)
+    horizon_status = Column(JSON, nullable=True)  # {"1d": "RESOLVED", "5d": "PENDING", ...}
 
     return_1d = Column(Float, nullable=True)
     return_5d = Column(Float, nullable=True)
@@ -494,6 +503,7 @@ class OpportunityOutcome(Base):
 
     market_regime = Column(String(50), nullable=True)
     sector = Column(String(50), nullable=True)
+    resolved_date = Column(DateTime, nullable=True)
 
     def __repr__(self):
         return f"<OpportunityOutcome {self.ticker}: score={self.opportunity_score:.1f} success={self.success}>"

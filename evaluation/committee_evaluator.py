@@ -92,13 +92,23 @@ class CommitteeEvaluator:
                     by_setup[key] = {}
                 by_setup[key][r.agent_name] = r
 
+            # Preload true SPY 5d returns by date from TrainingFeature
+            spy_records = session.query(TrainingFeature.date, TrainingFeature.spy_return_5d).filter(
+                TrainingFeature.spy_return_5d.isnot(None)
+            ).all()
+            spy_5d_by_date = {}
+            for s_date, s_ret in spy_records:
+                d_key = s_date.date() if isinstance(s_date, datetime) else s_date
+                if d_key not in spy_5d_by_date:
+                    spy_5d_by_date[d_key] = float(s_ret)
+
             logger.info(f"Reconstructed {len(by_setup)} investment setups for counterfactual evaluation.")
 
             committee_returns = []
             ml_only_returns = []
             opp_only_returns = []
             consensus_returns = []
-            benchmark_returns = []  # Market/SPY proxy from SPY bars or universe mean
+            benchmark_returns = []  # SPY benchmark directly from TrainingFeature.spy_return_5d
 
             vetoes = []
 
@@ -141,10 +151,9 @@ class CommitteeEvaluator:
                 comm_ret = net_r5 if committee_buys else 0.0
                 committee_returns.append(comm_ret)
 
-                # 5. SPY Benchmark proxy
-                # Fetch SPY return for that date or use universe market return
-                spy_outcomes = self.outcome_tracker.get_forward_outcomes("AAPL", t_stamp)  # Baseline reference
-                spy_ret = float(spy_outcomes["return_5d"]) if spy_outcomes and spy_outcomes["return_5d"] is not None else 0.0
+                # 5. Genuine SPY Benchmark from feature store
+                d_key = t_stamp.date() if isinstance(t_stamp, datetime) else t_stamp
+                spy_ret = spy_5d_by_date.get(d_key, 0.0)
                 benchmark_returns.append(spy_ret)
 
                 # Veto Analysis: Track candidate setups where ML wanted to buy, but Committee vetoed
@@ -195,7 +204,9 @@ class CommitteeEvaluator:
             total_vetoes = len(vetoes)
             successful_vetoes = sum(1 for v in vetoes if v["prevented_loss"])
             veto_accuracy = (successful_vetoes / total_vetoes) if total_vetoes > 0 else 0.0
-            total_capital_saved = sum(v["loss_avoided"] for v in vetoes)
+            total_avoided_losses = sum(v["loss_avoided"] for v in vetoes)
+            total_missed_gains = sum(max(0.0, v["net_return_5d"]) for v in vetoes if not v["prevented_loss"])
+            net_counterfactual_benefit = total_avoided_losses - total_missed_gains
 
             # Edge Calculations
             edge_vs_ml = comm_summary["annualized_return"] - ml_summary["annualized_return"]
@@ -219,7 +230,10 @@ class CommitteeEvaluator:
                     "vetoes_evaluated": total_vetoes,
                     "vetoes_prevented_losses": successful_vetoes,
                     "veto_loss_prevention_rate": veto_accuracy,
-                    "total_capital_saved_pct": total_capital_saved,
+                    "total_capital_saved_pct": total_avoided_losses,
+                    "total_avoided_losses_pct": total_avoided_losses,
+                    "total_missed_gains_pct": total_missed_gains,
+                    "net_counterfactual_benefit_pct": net_counterfactual_benefit,
                     "veto_details": vetoes
                 }
             }

@@ -1,6 +1,6 @@
 # SPRINT 9 — BASELINE MODEL EVALUATION REPORT
 **System Status:** Frozen Baseline Evaluation (`SPRINT_9_BASELINE`)  
-**Evaluation Date:** 2026-10-06  
+**Evaluation Date:** 2026-10-09  
 **Out-of-Sample Window:** `2025-09-23 to 2026-09-08`  
 **Sample Size:** 6005 observations across 25 tickers  
 **Decision Threshold:** `0.600`  
