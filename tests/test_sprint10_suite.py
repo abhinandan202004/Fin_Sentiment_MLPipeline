@@ -23,6 +23,27 @@ from execution.paper_gateway import PaperExecutionGateway, OrderRequest, OrderSt
 from execution.strategy_decision import StrategyDecisionEngine, StrategyDecision
 from monitoring.system_health import SystemHealthMonitor
 
+import tempfile
+from pathlib import Path
+import portfolio.risk_guard as _risk_guard_module
+
+_TMP_DIR = None
+_ORIGINAL_STATE_FILE = _risk_guard_module.STATE_FILE
+
+
+def setUpModule():
+    """Isolate kill-switch state: tests must never touch data/kill_switch_state.json."""
+    global _TMP_DIR
+    _TMP_DIR = tempfile.TemporaryDirectory()
+    _risk_guard_module.STATE_FILE = Path(_TMP_DIR.name) / "kill_switch_state.json"
+
+
+def tearDownModule():
+    _risk_guard_module.STATE_FILE = _ORIGINAL_STATE_FILE
+    if _TMP_DIR is not None:
+        _TMP_DIR.cleanup()
+
+
 
 class TestStrategyIntegrity(unittest.TestCase):
     """Verifies that ML model and Committee governance drive investment decisions."""

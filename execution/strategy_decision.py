@@ -71,8 +71,13 @@ class StrategyDecisionEngine:
         model_path: Optional[Path] = None,
         features_path: Optional[Path] = None,
         risk_guard: Optional[RiskGuard] = None,
-        data_validator: Optional[DataValidator] = None
+        data_validator: Optional[DataValidator] = None,
+        committee_required: bool = True
     ):
+        # committee_required=True (default): a candidate cannot become a BUY unless committee
+        # signals were supplied and evaluated. Set False only for backtests where the committee
+        # is not wired in; such runs must be labelled as ML-only.
+        self.committee_required = committee_required
         self.min_ml_prob = min_ml_prob
         self.opportunity_hurdle = opportunity_hurdle
         self.model_path = model_path or DEFAULT_MODEL_PATH
@@ -164,8 +169,36 @@ class StrategyDecisionEngine:
                 feature_snapshot=feature_snap
             )
 
-        feat_row = pd.DataFrame([{f: float(features.get(f, 0.0) or 0.0) for f in self.feature_list}])
-        prob = float(self.model.predict_proba(feat_row)[0, 1])
+        try:
+            parsed_feats = {}
+            for f in self.feature_list:
+                val = features.get(f, 0.0)
+                parsed_feats[f] = float(val) if val is not None else 0.0
+            feat_row = pd.DataFrame([parsed_feats])
+            prob = float(self.model.predict_proba(feat_row)[0, 1])
+        except Exception as exc:  # noqa: BLE001 - any inference failure must fail safe
+            logger.error(f"Model inference failed for {ticker}: {exc}")
+            prob = float("nan")
+            infer_error = f"MODEL_INFERENCE_FAILED: {type(exc).__name__}"
+        else:
+            infer_error = None
+        if infer_error or not np.isfinite(prob) or not (0.0 <= prob <= 1.0):
+            return StrategyDecision(
+                decision_id=decision_id,
+                trace_id=trace_id,
+                ticker=ticker,
+                decision_date=decision_date,
+                decision="REJECT",
+                model_name="Random Forest",
+                model_version="v2.0_43_features",
+                predicted_probability=0.0,
+                decision_threshold=self.min_ml_prob,
+                opportunity_score=0.0,
+                committee_status="NEUTRAL",
+                risk_approved=False,
+                risk_reason=infer_error or f"INVALID_PREDICTION: probability={prob}",
+                feature_snapshot=feature_snap
+            )
 
         # Directional Hurdle Filter
         if prob < self.min_ml_prob:
@@ -224,6 +257,26 @@ class StrategyDecisionEngine:
         veto_agent = None
         veto_reason = None
 
+        if not committee_signals and self.committee_required:
+            return StrategyDecision(
+                decision_id=decision_id,
+                trace_id=trace_id,
+                ticker=ticker,
+                decision_date=decision_date,
+                decision="REJECT",
+                model_name="Random Forest",
+                model_version="v2.0_43_features",
+                predicted_probability=prob,
+                decision_threshold=self.min_ml_prob,
+                opportunity_score=opp_score,
+                committee_status="NOT_EVALUATED",
+                risk_approved=False,
+                risk_reason="COMMITTEE_NOT_EVALUATED: no committee signals supplied",
+                feature_snapshot=feature_snap
+            )
+        if not committee_signals:
+            comm_status = "NOT_EVALUATED"
+
         if committee_signals:
             cro_stance = committee_signals.get("Risk Officer", {}).get("stance", "BUY")
             pros_stance = committee_signals.get("Evidence Prosecutor", {}).get("stance", "BUY")
@@ -260,6 +313,25 @@ class StrategyDecisionEngine:
                     risk_reason=f"COMMITTEE_VETO: {veto_agent} vetoed ({veto_reason})",
                     feature_snapshot=feature_snap
                 )
+
+        if comm_status == "NEUTRAL" and committee_signals:
+            return StrategyDecision(
+                decision_id=decision_id,
+                trace_id=trace_id,
+                ticker=ticker,
+                decision_date=decision_date,
+                decision="REJECT",
+                model_name="Random Forest",
+                model_version="v2.0_43_features",
+                predicted_probability=prob,
+                decision_threshold=self.min_ml_prob,
+                opportunity_score=opp_score,
+                committee_status=comm_status,
+                veto_reason=veto_reason,
+                risk_approved=False,
+                risk_reason=f"COMMITTEE_NOT_APPROVED: {veto_reason}",
+                feature_snapshot=feature_snap
+            )
 
         # --- Stage 5: Pre-Trade Risk Guard ---
         total_equity = float(portfolio_state.get("total_equity", 12000.0))
@@ -317,7 +389,7 @@ class StrategyDecisionEngine:
             predicted_probability=prob,
             decision_threshold=self.min_ml_prob,
             opportunity_score=opp_score,
-            committee_status="APPROVED",
+            committee_status=comm_status,
             risk_approved=True,
             risk_reason="All risk checks satisfied",
             target_allocation_pct=target_alloc_pct,

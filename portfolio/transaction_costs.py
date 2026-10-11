@@ -13,6 +13,9 @@ class TransactionCostModel:
     Default total roundtrip friction: 10 bps (0.001).
     """
     cost_rate: float = 0.001
+    commission_rate: float = 0.0005   # 5 bps per side
+    slippage_rate: float = 0.0002     # 2 bps per side
+    spread_rate: float = 0.0003       # 3 bps per side
 
     def compute_rebalance_cost(
         self,
@@ -46,9 +49,9 @@ class TransactionCostModel:
         - Spread / Exchange fees: 3 bps (0.0003)
         Total one-way: 10 bps (0.0010)
         """
-        comm = trade_value * 0.0005
-        slip = trade_value * 0.0002
-        spread = trade_value * 0.0003
+        comm = trade_value * self.commission_rate
+        slip = trade_value * self.slippage_rate
+        spread = trade_value * self.spread_rate
         total = comm + slip + spread
         return {
             "commission": comm,

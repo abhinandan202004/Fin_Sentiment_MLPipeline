@@ -9,6 +9,7 @@ Enforces:
 4. Non-liquidation safety: blocks new trading activity safely without forced firesales.
 """
 
+import math
 import json
 import logging
 from dataclasses import dataclass, asdict
@@ -27,6 +28,7 @@ class RiskLimits:
     max_single_position_pct: float = 0.15     # Max 15% in any single ticker
     max_sector_exposure_pct: float = 0.40     # Max 40% in any economic sector
     min_cash_pct: float = 0.10                # Minimum 10% cash liquidity reserve
+    max_aggregate_invested_pct: float = 0.90  # Max 90% of equity invested across all positions
     max_portfolio_drawdown_pct: float = 0.20  # Max 20% peak-to-trough drawdown threshold
     max_daily_loss_pct: float = 0.05          # Max 5% single-day loss threshold
     paper_trading_only: bool = True           # Non-negotiable safety invariant for Sprint 10
@@ -166,7 +168,7 @@ class RiskGuard:
             )
 
         # 3. Parameter Sanity
-        if quantity <= 0.0 or price <= 0.0:
+        if not (math.isfinite(quantity) and math.isfinite(price)) or quantity <= 0.0 or price <= 0.0:
             return RiskValidationResult(
                 approved=False,
                 reason=f"INVALID_PARAMETERS: quantity={quantity}, price={price}",
@@ -185,14 +187,8 @@ class RiskGuard:
                 violation_code="INSOLVENT_PORTFOLIO"
             )
 
-        # 4. Maximum Drawdown Check
-        current_drawdown = (peak_equity - total_equity) / peak_equity if peak_equity > 0 else 0.0
-        if current_drawdown >= self.limits.max_portfolio_drawdown_pct:
-            return RiskValidationResult(
-                approved=False,
-                reason=f"MAX_DRAWDOWN_EXCEEDED: Current drawdown {current_drawdown:.1%} >= limit {self.limits.max_portfolio_drawdown_pct:.1%}",
-                violation_code="DRAWDOWN_LIMIT_BREACH"
-            )
+        # Drawdown and daily-loss limits (checked below) block NEW risk (BUY) only;
+        # exits are never blocked by them, so a breached portfolio can still de-risk.
 
         # For SELL orders, verify sufficient open position to close
         if side == "SELL":
@@ -210,6 +206,27 @@ class RiskGuard:
                 allowed_dollars=quantity * price,
                 adjusted_quantity=quantity
             )
+
+        # 4. Maximum Drawdown Check (BUY only)
+        current_drawdown = (peak_equity - total_equity) / peak_equity if peak_equity > 0 else 0.0
+        if current_drawdown >= self.limits.max_portfolio_drawdown_pct:
+            return RiskValidationResult(
+                approved=False,
+                reason=f"MAX_DRAWDOWN_EXCEEDED: Current drawdown {current_drawdown:.1%} >= limit {self.limits.max_portfolio_drawdown_pct:.1%}",
+                violation_code="DRAWDOWN_LIMIT_BREACH"
+            )
+
+        # 4b. Maximum Daily Loss Check (BUY only). Requires 'day_start_equity' in portfolio_state;
+        # callers that omit it cannot be evaluated (the gateway always supplies it).
+        day_start = portfolio_state.get("day_start_equity")
+        if day_start is not None and float(day_start) > 0:
+            daily_loss = (float(day_start) - total_equity) / float(day_start)
+            if daily_loss >= self.limits.max_daily_loss_pct:
+                return RiskValidationResult(
+                    approved=False,
+                    reason=f"MAX_DAILY_LOSS_EXCEEDED: Daily loss {daily_loss:.1%} >= limit {self.limits.max_daily_loss_pct:.1%}",
+                    violation_code="DAILY_LOSS_LIMIT_BREACH"
+                )
 
         # BUY Order Evaluation:
         order_cost = quantity * price
@@ -270,6 +287,22 @@ class RiskGuard:
                     allowed_dollars=0.0
                 )
             order_cost = allowed_additional_sector
+            quantity = order_cost / price
+
+        # 8. Aggregate Invested Capital Check
+        invested = sum(p.get("shares", 0.0) * p.get("current_price", price) for p in open_positions.values())
+        max_invested = total_equity * self.limits.max_aggregate_invested_pct
+        if invested + order_cost > max_invested:
+            allowed_additional_agg = max_invested - invested
+            if allowed_additional_agg < 100.0:
+                return RiskValidationResult(
+                    approved=False,
+                    reason=f"MAX_AGGREGATE_INVESTED: Invested {invested + order_cost:,.2f} exceeds {self.limits.max_aggregate_invested_pct:.0%} of equity ({max_invested:,.2f})",
+                    violation_code="AGGREGATE_EXPOSURE_EXCEEDED",
+                    requested_dollars=quantity * price,
+                    allowed_dollars=0.0
+                )
+            order_cost = allowed_additional_agg
             quantity = order_cost / price
 
         return RiskValidationResult(

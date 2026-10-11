@@ -88,11 +88,27 @@ class PortfolioLedger:
         """
         Verifies the core mathematical invariant:
         total_equity == cash + market_value_of_positions
+        (an identity check; see reconcile() for the independent cash-flow check)
         """
         pos_val = self.get_positions_value()
         expected_eq = self.cash + pos_val
         actual_eq = self.get_total_equity()
         delta = abs(actual_eq - expected_eq)
+        return (delta <= tolerance), delta
+
+    def equity_at_start_of(self, trade_date: date) -> float:
+        """Equity of the last snapshot strictly before `trade_date` (else initial capital)."""
+        prior = [s for s in self.daily_snapshots if s.snapshot_date < trade_date]
+        return prior[-1].total_equity if prior else self.initial_capital
+
+    def reconcile(self, tolerance: float = 1e-6) -> Tuple[bool, float]:
+        """
+        Independent reconciliation: rebuilds cash from initial capital plus every
+        recorded cash flow and compares it with the live cash balance. Detects
+        unexplained cash changes, which the identity invariant cannot.
+        """
+        expected_cash = self.initial_capital + sum(t["cash_delta"] for t in self.transaction_history)
+        delta = abs(self.cash - expected_cash)
         return (delta <= tolerance), delta
 
     def record_buy(
@@ -106,10 +122,15 @@ class PortfolioLedger:
         trace_id: Optional[str] = None
     ) -> PositionRecord:
         """
-        Atomic BUY transaction:
+        Atomic BUY transaction (all validation happens before any state change):
         - Deducts purchase cost + entry transaction fees from cash.
-        - Records new or increased open position.
+        - Opens a new position. Adding to an already-open ticker is rejected.
         """
+        if shares <= 0 or fill_price <= 0:
+            raise ValueError(f"Ledger violation: invalid BUY shares={shares} price={fill_price}")
+        if ticker in self.open_positions:
+            raise ValueError(f"Ledger violation: position already open for {ticker}")
+
         gross_value = shares * fill_price
         comm = costs.get("commission", 0.0)
         slip = costs.get("slippage", 0.0)
@@ -122,6 +143,7 @@ class PortfolioLedger:
                 f"Ledger violation: Insufficient cash ({self.cash:,.2f} USD) for BUY outflow ({total_cash_outflow:,.2f} USD)"
             )
 
+        # --- mutation phase (nothing below can fail) ---
         self.cash -= total_cash_outflow
 
         pos = PositionRecord(
@@ -150,13 +172,11 @@ class PortfolioLedger:
             "shares": shares,
             "price": fill_price,
             "fee": total_entry_fee,
+            "cash_delta": -total_cash_outflow,
             "cash_after": self.cash,
             "date": trade_date.isoformat() if hasattr(trade_date, "isoformat") else str(trade_date),
             "trace_id": trace_id
         })
-
-        is_valid, delta = self.verify_ledger_invariant()
-        assert is_valid, f"Ledger invariant broken after BUY: delta={delta}"
         return pos
 
     def record_sell(
@@ -165,18 +185,25 @@ class PortfolioLedger:
         fill_price: float,
         trade_date: date,
         costs: Dict[str, float],
-        trace_id: Optional[str] = None
+        trace_id: Optional[str] = None,
+        shares: Optional[float] = None
     ) -> PositionRecord:
         """
-        Atomic SELL transaction:
+        Atomic SELL transaction (validation precedes mutation):
         - Credits gross sale proceeds minus exit transaction fees to cash.
-        - Closes and removes position from open_positions (zero double counting).
+        - Closes the full position; if `shares` is given it must equal the held quantity.
         - Computes exact realized gross and net P&L.
         """
         if ticker not in self.open_positions:
             raise KeyError(f"Ledger violation: Attempted to sell non-existent open position for {ticker}")
+        if fill_price <= 0:
+            raise ValueError(f"Ledger violation: invalid SELL price={fill_price}")
 
         pos = self.open_positions[ticker]
+        if shares is not None and abs(shares - pos.shares) > 1e-9:
+            raise ValueError(
+                f"Ledger violation: partial SELL unsupported (requested {shares}, held {pos.shares})"
+            )
         gross_proceeds = pos.shares * fill_price
         comm = costs.get("commission", 0.0)
         slip = costs.get("slippage", 0.0)
@@ -184,11 +211,13 @@ class PortfolioLedger:
         total_exit_fee = comm + slip + spread
 
         net_cash_inflow = gross_proceeds - total_exit_fee
-        self.cash += net_cash_inflow
 
         gross_pnl = (fill_price - pos.entry_price) * pos.shares
         total_roundtrip_fees = pos.entry_cost + total_exit_fee
         net_pnl = gross_pnl - total_roundtrip_fees
+
+        # --- mutation phase (nothing below can fail) ---
+        self.cash += net_cash_inflow
 
         pos.exit_date = trade_date
         pos.exit_price = fill_price
@@ -212,13 +241,11 @@ class PortfolioLedger:
             "price": fill_price,
             "fee": total_exit_fee,
             "realized_pnl": net_pnl,
+            "cash_delta": net_cash_inflow,
             "cash_after": self.cash,
             "date": trade_date.isoformat() if hasattr(trade_date, "isoformat") else str(trade_date),
             "trace_id": trace_id
         })
-
-        is_valid, delta = self.verify_ledger_invariant()
-        assert is_valid, f"Ledger invariant broken after SELL: delta={delta}"
         return pos
 
     def mark_to_market(self, price_map: Dict[str, float], snapshot_date: date) -> LedgerSnapshot:

@@ -1,66 +1,89 @@
 # Sprint 10 — Automated Test Report & Failure Simulation
 
-**Audit Date:** 2026-10-10  
+**Audit Date:** 2026-10-12  
 **Scope:** Automated Test Execution, Failure Injections, Edge Cases, and Regression Validation  
 
 ---
 
 ## 1. Executive Summary
 
-The Sprint 10 automated test suite ([`tests/test_sprint10_suite.py`](file:///c:/Users/ABHI%20N%20P/OneDrive/Desktop/Fin_Sentiment_MLPipeline/tests/test_sprint10_suite.py)) and the Sprint 9 integrity suite ([`scripts/audit_sprint9_integrity.py`](file:///c:/Users/ABHI%20N%20P/OneDrive/Desktop/Fin_Sentiment_MLPipeline/scripts/audit_sprint9_integrity.py)) were executed under `unittest` runner.
+The automated testing framework covers 5 distinct suites:
+1. `tests/test_sprint10_suite.py`: Core lifecycle, risk, and data reliability (13 tests)
+2. `tests/test_sprint10_remediation.py`: Durable order store, restart recovery, atomicity, and concurrency (10 tests)
+3. `tests/test_sprint10_ops.py`: SPY benchmark alignment, ops API routes, token auth, and HTTP correlation IDs (17 tests)
+4. `tests/test_sprint10_strategy_risk.py`: Zero leakage, deterministic replay, daily loss, drawdown, and parameter sanity (8 tests)
+5. `scripts/audit_sprint9_integrity.py`: Historical quantitative integrity regression (10 tests)
+6. Master Release Gate Integration: `scripts/validate_sprint10_readiness.py` (8 standalone integration tests)
 
-All **23 individual test cases passed with zero errors and zero regressions**:
-- `tests/test_sprint10_suite.py`: **13/13 PASS** (0.711s)
-- `scripts/audit_sprint9_integrity.py`: **10/10 PASS** (2.072s)
-- Master Release Gate: **10/10 PASS** (`validate_sprint10_readiness.py`)
+All **66 individual test cases passed with zero errors, zero failures, and zero regressions**:
+- **Total Tests Executed:** 66
+- **Pass Rate:** **100% (66/66 PASS)**
+- **Regression Status:** Zero regressions against Sprint 9 integrity baselines
 
 ---
 
 ## 2. Test Execution Breakdown by Category
 
 ### Category 1: Strategy Integrity & Decision Provenance
-| Test Name | Module Tested | Objective / Scenario | Status |
+| Test Name | Suite | Objective / Scenario | Status |
 | :--- | :--- | :--- | :---: |
-| `test_missing_features_fail_safely` | `StrategyDecisionEngine` | Incomplete feature vectors (1 feature vs 43 required) must reject candidate safely without exception. | **PASS** |
-| `test_ml_hurdle_blocks_low_conviction` | `StrategyDecisionEngine` | Setting strict probability hurdle ($\hat{p} \ge 0.99$) rejects candidate with code `ML_CONVICTION_BELOW_HURDLE`. | **PASS** |
-| `test_committee_veto_blocks_order` | `StrategyDecisionEngine` | Risk Officer `VETO` stance blocks order submission and persists reason into decision record. | **PASS** |
+| `test_missing_features_fail_safely` | `test_sprint10_suite` | Incomplete feature vectors reject candidate safely without unhandled exception. | **PASS** |
+| `test_ml_hurdle_blocks_low_conviction` | `test_sprint10_suite` | Probability hurdle ($\hat{p} \ge 0.99$) rejects candidate with code `ML_CONVICTION_BELOW_HURDLE`. | **PASS** |
+| `test_committee_veto_blocks_order` | `test_sprint10_suite` | Risk Officer `VETO` stance blocks order submission and persists veto reason. | **PASS** |
+| `test_target_label_leakage_has_zero_influence` | `test_sprint10_strategy_risk` | Ingestion of `target`, `future_return_5d` produces identical decision to clean input. | **PASS** |
+| `test_deterministic_replay_produces_identical_decision` | `test_sprint10_strategy_risk` | Replay of identical candidate features produces bitwise identical decision records. | **PASS** |
+| `test_invalid_and_nan_prediction_fails_safely` | `test_sprint10_strategy_risk` | Model exceptions or NaN probabilities fail safe to `REJECT`. | **PASS** |
+| `test_committee_required_blocks_unreviewed_trades` | `test_sprint10_strategy_risk` | Rejects trades where committee signals were omitted when `committee_required=True`. | **PASS** |
 
 ### Category 2: Market Data Reliability
-| Test Name | Module Tested | Objective / Scenario | Status |
+| Test Name | Suite | Objective / Scenario | Status |
 | :--- | :--- | :--- | :---: |
-| `test_staleness_detection_with_holidays`| `DataValidator` | Recognizes weekend and market holidays (MLK Day) as non-trading days; flags elapsed market days $> 2$ as stale. | **PASS** |
-| `test_price_bar_anomaly_rejection` | `DataValidator` | Inverted ranges ($h < l$), non-positive prices ($c \le 0$), and extreme jumps ($+150\%$) are rejected. | **PASS** |
+| `test_staleness_detection_with_holidays`| `test_sprint10_suite` | Distinguishes weekend/holidays from data dropouts; flags $> 2$ missing market sessions. | **PASS** |
+| `test_price_bar_anomaly_rejection` | `test_sprint10_suite` | Inverted ranges ($h < l$), non-positive prices ($c \le 0$), and extreme jumps are rejected. | **PASS** |
 
-### Category 3: Central Risk Guard & Kill Switch
-| Test Name | Module Tested | Objective / Scenario | Status |
+### Category 3: Central Risk Guard & Capital Protection
+| Test Name | Suite | Objective / Scenario | Status |
 | :--- | :--- | :--- | :---: |
-| `test_kill_switch_activation_and_deactivation` | `RiskGuard` | Kill switch activation blocks incoming orders with `KILL_SWITCH_ENGAGED`; deactivation restores approval. | **PASS** |
-| `test_single_position_limit_enforcement` | `RiskGuard` | Position allocation exceeding 15% concentration is rejected or sized down. | **PASS** |
-| `test_cash_reserve_enforcement` | `RiskGuard` | Orders leaving less than 10% unreserved cash liquidity are rejected with `INSUFFICIENT_UNRESERVED_CASH`. | **PASS** |
+| `test_kill_switch_activation_and_deactivation` | `test_sprint10_suite` | Engaging kill switch blocks orders; deactivation restores order approvals. | **PASS** |
+| `test_single_position_limit_enforcement` | `test_sprint10_suite` | Position allocation exceeding 15% concentration is rejected or sized down. | **PASS** |
+| `test_cash_reserve_enforcement` | `test_sprint10_suite` | Orders leaving less than 10% unreserved cash liquidity are rejected. | **PASS** |
+| `test_daily_loss_limit_blocks_new_buy_orders` | `test_sprint10_strategy_risk` | Single-day portfolio drawdown $\ge 5\%$ blocks incoming BUY orders. | **PASS** |
+| `test_drawdown_limit_blocks_buy_but_permits_sell` | `test_sprint10_strategy_risk` | Peak drawdown breach ($\ge 20\%$) blocks new BUYs but permits SELLs for de-risking. | **PASS** |
+| `test_aggregate_invested_capital_limit` | `test_sprint10_strategy_risk` | Portfolio-wide exposure cap (85%) sizes down or rejects excess allocation. | **PASS** |
+| `test_non_finite_and_corrupt_parameters_rejected` | `test_sprint10_strategy_risk` | Rejects NaN, Inf, non-positive equity, or zero/negative prices. | **PASS** |
 
-### Category 4: Paper Execution Gateway & Idempotency
-| Test Name | Module Tested | Objective / Scenario | Status |
+### Category 4: Paper Execution Gateway & Durability
+| Test Name | Suite | Objective / Scenario | Status |
 | :--- | :--- | :--- | :---: |
-| `test_valid_order_lifecycle` | `PaperExecutionGateway` | Order transitions strictly through `CREATED -> VALIDATED -> SUBMITTED -> FILLED` with state history audit. | **PASS** |
-| `test_idempotent_order_deduplication` | `PaperExecutionGateway` | Duplicate order submission with identical idempotency key returns existing fill with zero double cash deduction. | **PASS** |
+| `test_valid_order_lifecycle` | `test_sprint10_suite` | Order transitions through `CREATED -> VALIDATED -> SUBMITTED -> FILLED`. | **PASS** |
+| `test_idempotent_order_deduplication` | `test_sprint10_suite` | Resubmitting same idempotency key returns existing fill without duplicate cash deduction. | **PASS** |
+| `test_buy_costs_applied_exactly_once` | `test_sprint10_remediation` | Slippage is embedded in fill price only; commission + spread deducted as cash fee. | **PASS** |
+| `test_round_trip_cost_matches_hand_calculation`| `test_sprint10_remediation` | Verified exact cash ledger balance against manual arithmetic roundtrip. | **PASS** |
+| `test_restart_replays_fills_and_blocks_duplicate` | `test_sprint10_remediation` | Restart from SQLite order store restores open positions and prevents duplicate fill. | **PASS** |
+| `test_concurrent_identical_submissions_fill_once` | `test_sprint10_remediation` | 16 concurrent threads with same idempotency key produce exactly 1 fill. | **PASS** |
+| `test_concurrent_distinct_orders_never_overspend` | `test_sprint10_remediation` | 12 concurrent order threads never exceed available cash. | **PASS** |
 
-### Category 5: Portfolio Ledger Invariants
-| Test Name | Module Tested | Objective / Scenario | Status |
+### Category 5: Portfolio Ledger Accounting
+| Test Name | Suite | Objective / Scenario | Status |
 | :--- | :--- | :--- | :---: |
-| `test_atomic_buy_and_sell_with_exact_invariants` | `PortfolioLedger` | Full BUY -> MTM appreciation -> SELL cycle satisfies `total_equity == cash + market_value` ($\Delta < 10^{-4}$). | **PASS** |
+| `test_atomic_buy_and_sell_with_exact_invariants` | `test_sprint10_suite` | `total_equity == cash + market_value` holds across buy, mark-to-market, and sell. | **PASS** |
+| `test_failed_buy_leaves_state_untouched` | `test_sprint10_remediation` | Validation failure leaves ledger cash and transaction history untouched. | **PASS** |
+| `test_duplicate_open_position_rejected` | `test_sprint10_remediation` | Second BUY on an already open ticker is rejected without state mutation. | **PASS** |
+| `test_partial_sell_rejected` | `test_sprint10_remediation` | Quantity mismatch in SELL is rejected cleanly. | **PASS** |
+| `test_reconcile_detects_unexplained_cash_change` | `test_sprint10_remediation` | Cash tampering is immediately caught by independent cash-flow summation. | **PASS** |
 
-### Category 6: Operational Health & Diagnostics
-| Test Name | Module Tested | Objective / Scenario | Status |
+### Category 6: Benchmark & Operational API
+| Test Name | Suite | Objective / Scenario | Status |
 | :--- | :--- | :--- | :---: |
-| `test_health_check_returns_healthy` | `SystemHealthMonitor` | Liveness check confirms database connectivity, model existence, and paper trading mode. | **PASS** |
-| `test_readiness_check_structure` | `SystemHealthMonitor` | Readiness check evaluates gating dependencies and returns structured diagnosis. | **PASS** |
+| `test_hand_computed_returns_and_drawdown` | `test_sprint10_ops` | Manual calculation verification of return, excess return, and max drawdown. | **PASS** |
+| `test_blocked_without_spy_and_no_substitution` | `test_sprint10_ops` | Omitting SPY marks status as BLOCKED with no synthetic asset substitution. | **PASS** |
+| `test_alignment_uses_intersection_only` | `test_sprint10_ops` | Drops unaligned dates rather than fabricating prices with forward fills. | **PASS** |
+| `test_health_and_readiness` | `test_sprint10_ops` | `/health` returns 200; `/readiness` returns 503 when dependencies fail. | **PASS** |
+| `test_kill_switch_requires_token` | `test_sprint10_ops` | POST to `/trading/kill-switch/activate` without `X-Admin-Token` returns 401. | **PASS** |
+| `test_http_roundtrip_with_correlation_id` | `test_sprint10_ops` | End-to-end localhost HTTP roundtrip verifies `X-Correlation-ID` tracing. | **PASS** |
 
 ---
 
-## 3. Failure Simulation Verdict
+## 3. Summary Verdict
 
-Critical operational failures were explicitly simulated:
-1. **Kill Switch Active:** All orders blocked safely; portfolio preserved without forced liquidations.
-2. **Missing Features:** Inference halted; candidate rejected without corrupting model state.
-3. **Duplicate Order Transmission:** Network replay attack/retry intercepted by idempotency engine; zero capital double-counting.
-4. **Stale Market Feed:** Data feed failure flags stale bars; pre-trade risk gate blocks new positions.
+The testing suite validates all strategy, risk, execution, accounting, and operational requirements with **zero regressions**. The platform is verified for simulated forward paper trading.

@@ -26,6 +26,7 @@ $$\text{Total Equity}_t \equiv \text{Cash}_t + \sum_{i \in \text{Open}} \left(\t
 - **Mark-to-Market Valuation:** Prices update dynamically; $\Delta \text{Equity} = \Delta \text{Unrealized P&L}$. Cash is untouched.
 - **SELL Transaction:** Cash is credited in by $\text{Shares} \times \text{Price} - \text{Fees}$. Open position is removed immediately (zero double-counting). Net equity changes strictly by realized net return.
 - **Snapshot Reconciliation:** All 167 daily walk-forward snapshots satisfy $\left|\text{Total Equity} - (\text{Cash} + \text{Positions Value})\right| < 10^{-6}$.
+- **Independent Cash-Flow Reconciliation:** `PortfolioLedger.reconcile()` verifies that live cash balance matches $\text{Initial Capital} + \sum \Delta \text{Cash Flows}$ without relying on identity tautologies.
 
 ---
 
@@ -56,16 +57,23 @@ Across the 6,005 baseline predictions, each horizon matures independently:
 
 ## 4. Benchmark Alignment & Financial Metrics
 
-Comparisons evaluate strategy returns against genuine S&P 500 daily compounding (`spy_return_1d`):
+Comparisons evaluate strategy returns against genuine S&P 500 daily compounding (`SPY`):
+- Benchmark dataset: `data/benchmark/SPY.csv` (1,274 trading sessions, SHA-256 sidecar verified).
+- No asset substitution: SPY only. Dates are aligned strictly on common trading sessions with zero interpolation.
 
 | Performance Dimension | Paper Portfolio Strategy | True SPY Benchmark | Net Alpha / Spread |
 | :--- | :---: | :---: | :---: |
-| **Cumulative Return** | `+18.13%` | `+14.12%` | **+4.00 pp** |
-| **Annualized Sharpe Ratio** | `1.59` | `1.50` | `+0.09` |
-| **Annualized Sortino Ratio**| `2.35` | `2.71` | `-0.36` |
-| **Maximum Drawdown** | `14.02%` | `13.56%` | `+0.46 pp` |
-| **Profit Factor** | `1.31` | `1.67` | `-0.36` |
+| **Cumulative Return** | `+18.23%` | `+13.48%` | **+4.76 pp** |
+| **Annualized Return** | `+28.95%` | `+21.16%` | **+7.79 pp** |
+| **Annualized Sharpe Ratio** | `1.60` | `1.50` | `+0.10` |
+| **Maximum Drawdown** | `14.02%` | `9.13%` | `+4.89 pp` |
+| **Volatility (Annualized)** | `16.78%` | `11.85%` | `+4.93 pp` |
 | **Closed Trades Executed** | 292 | — | Win Rate: `50.3%` |
 | **Total Roundtrip Friction** | ₹58,029.33 / $696.35 USD | — | Deducted (10 bps roundtrip) |
+
+### Reconciliation of Legacy Performance Claims:
+- **Prior Claim (Sprint 9):** `+118.44%` return ($₹21,84,392$).
+- **Audit Findings:** The legacy simulation suffered from lookahead bias (`cand.target == 1` prefiltering) and currency mixing (USD prices subtracted directly from INR cash without FX rate).
+- **Corrected Verified Result:** In honest out-of-sample execution without target leakage, the strategy achieves **+18.23%** vs SPY **+13.48%**. The prior +118% metric is explicitly documented as an invalid historical artifact.
 
 *Disclaimer:* Historical backtest results and paper simulations do not constitute guarantees of future live profitability.

@@ -1,0 +1,38 @@
+{
+  "benchmark_ticker": "SPY",
+  "status": "OK",
+  "notes": [],
+  "coverage": {
+    "equity_dates": 167,
+    "benchmark_dates": 1274,
+    "aligned_dates": 167,
+    "equity_dates_without_benchmark": 0,
+    "benchmark_dates_outside_equity_window": 0,
+    "handling": "intersection of dates only; no fill or interpolation"
+  },
+  "window": {
+    "start": "2025-10-01",
+    "end": "2026-06-01",
+    "return_observations": 166
+  },
+  "cumulative_return": 0.18233432425500928,
+  "benchmark_return": 0.13477442467666534,
+  "cumulative_excess_return": 0.047559899578343945,
+  "volatility_annualized": 0.16775034613091064,
+  "sharpe_ratio": 1.5998419032199267,
+  "max_drawdown": 0.14021543387576618,
+  "benchmark_max_drawdown": 0.09133132097249053,
+  "annualized_return": 0.28951093800185834,
+  "benchmark_annualized_return": 0.21159270520544649,
+  "disclaimer": "Historical result for this run only; not a forecast of future performance.",
+  "equity_source": "legacy Sprint 9.2 paper_trading_snapshots (not a Sprint 10 gateway run; selection logic provenance: see strategy_integrity.md)",
+  "benchmark_provenance": {
+    "ticker": "SPY",
+    "source": "yfinance (unadjusted Close)",
+    "fetched_at": "2026-10-11T18:03:54.405098+00:00",
+    "rows": 1274,
+    "first_date": "2021-09-01",
+    "last_date": "2026-09-29",
+    "sha256": "98957793c099cb2b03f105a68110a93a46040ab3955f277a64a6572722112572"
+  }
+}

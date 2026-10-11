@@ -19,6 +19,7 @@ Features:
 
 import uuid
 import logging
+import threading
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime, timezone
 from enum import Enum
@@ -27,6 +28,7 @@ from typing import Dict, List, Any, Optional
 from portfolio.risk_guard import RiskGuard, RiskValidationResult
 from portfolio.ledger import PortfolioLedger, PositionRecord
 from portfolio.transaction_costs import TransactionCostModel
+from execution.order_store import OrderStore
 
 logger = logging.getLogger("PaperGateway")
 
@@ -81,17 +83,38 @@ class Order:
     reference_price: float = 0.0
     fill_price: float = 0.0
     commission: float = 0.0
-    slippage: float = 0.0
+    slippage: float = 0.0   # informational: dollar slippage already embedded in fill_price
     spread: float = 0.0
-    total_fees: float = 0.0
+    total_fees: float = 0.0  # cash fees charged to the ledger = commission + spread
     rejection_reason: Optional[str] = None
     strategy_id: str = "STRAT_ML_COMMITTEE_V1"
     trace_id: Optional[str] = None
     state_history: List[Dict[str, Any]] = field(default_factory=list)
+    trade_date: Optional[str] = None
+    sector: str = "Technology"
+
+
+def _order_to_dict(order: Order) -> Dict[str, Any]:
+    d = asdict(order)
+    d["status"] = order.status.value
+    return d
+
+
+def _order_from_dict(d: Dict[str, Any]) -> Order:
+    d = dict(d)
+    d["status"] = OrderStatus(d["status"])
+    return Order(**d)
 
 
 class PaperExecutionGateway:
-    """Broker-neutral simulated execution gateway enforcing strict order states and risk checks."""
+    """
+    Broker-neutral simulated execution gateway enforcing strict order states and risk checks.
+
+    Cost accounting (each cost applied exactly once):
+      - slippage: embedded in the fill price (BUY fills above, SELL below the reference
+        price by `cost_model.slippage_rate`); NOT charged again as a cash fee.
+      - commission and spread: computed on fill-price notional and charged as cash fees.
+    """
 
     # Allowed state machine transitions
     VALID_TRANSITIONS = {
@@ -107,13 +130,42 @@ class PaperExecutionGateway:
         self,
         ledger: Optional[PortfolioLedger] = None,
         risk_guard: Optional[RiskGuard] = None,
-        cost_model: Optional[TransactionCostModel] = None
+        cost_model: Optional[TransactionCostModel] = None,
+        store: Optional[OrderStore] = None
     ):
         self.ledger = ledger or PortfolioLedger()
         self.risk_guard = risk_guard or RiskGuard()
         self.cost_model = cost_model or TransactionCostModel()
+        self.store = store
+        self._lock = threading.RLock()
         self.orders: Dict[str, Order] = {}
         self.orders_by_idempotency: Dict[str, str] = {}  # idempotency_key -> order_id
+        if self.store is not None:
+            self._restore_from_store()
+
+    def _persist(self, order: Order) -> None:
+        if self.store is not None:
+            self.store.update(_order_to_dict(order))
+
+    def _restore_from_store(self) -> None:
+        """
+        Restart recovery: reload all orders and replay FILLED ones into a fresh ledger
+        so cash/positions match what was already executed (no duplicate fills).
+        """
+        fresh_ledger = not self.ledger.transaction_history
+        for d in self.store.all_orders():
+            order = _order_from_dict(d)
+            self.orders[order.order_id] = order
+            self.orders_by_idempotency[order.idempotency_key] = order.order_id
+            if order.status == OrderStatus.FILLED and fresh_ledger:
+                costs = {"commission": order.commission, "slippage": 0.0, "spread": order.spread}
+                trade_date = date.fromisoformat(order.trade_date) if order.trade_date else date.today()
+                if order.side == "BUY":
+                    self.ledger.record_buy(order.ticker, order.quantity, order.fill_price,
+                                           trade_date, costs, sector=order.sector, trace_id=order.trace_id)
+                else:
+                    self.ledger.record_sell(order.ticker, order.fill_price, trade_date, costs,
+                                            trace_id=order.trace_id, shares=order.quantity)
 
     def _transition_status(self, order: Order, new_status: OrderStatus, reason: Optional[str] = None):
         """Validates and applies an order state transition."""
@@ -135,6 +187,7 @@ class PaperExecutionGateway:
             order.filled_at = now_str
         elif new_status == OrderStatus.REJECTED:
             order.rejection_reason = reason
+        self._persist(order)
 
     def submit_order(
         self,
@@ -143,14 +196,18 @@ class PaperExecutionGateway:
         is_stale: bool = False
     ) -> Order:
         """
-        Executes the complete order submission pipeline:
-        1. Idempotency deduplication check.
+        Executes the complete order submission pipeline (serialized by a lock):
+        1. Idempotency deduplication check (memory, then durable store).
         2. Lifecycle creation (CREATED).
         3. Pre-trade risk validation gate (VALIDATED or REJECTED).
         4. Submission to paper matching engine (SUBMITTED).
-        5. Execution fill against current market price + friction (FILLED).
+        5. Execution fill against reference price + friction (FILLED).
         6. Atomic portfolio ledger update.
         """
+        with self._lock:
+            return self._submit_order_locked(request, market_price, is_stale)
+
+    def _submit_order_locked(self, request: OrderRequest, market_price: float, is_stale: bool) -> Order:
         now_str = datetime.now(timezone.utc).isoformat()
         ticker = request.ticker.upper().strip()
         side = request.side.upper().strip()
@@ -162,6 +219,13 @@ class PaperExecutionGateway:
             existing_id = self.orders_by_idempotency[idempotency_key]
             logger.info(f"Duplicate order request with idempotency key '{idempotency_key}'. Returning existing order {existing_id}.")
             return self.orders[existing_id]
+        if self.store is not None:
+            persisted = self.store.get_by_key(idempotency_key)
+            if persisted is not None:
+                order = _order_from_dict(persisted)
+                self.orders[order.order_id] = order
+                self.orders_by_idempotency[idempotency_key] = order.order_id
+                return order
 
         order_id = str(uuid.uuid4())
         trace_id = request.trace_id or str(uuid.uuid4())
@@ -178,9 +242,18 @@ class PaperExecutionGateway:
             created_at=now_str,
             reference_price=market_price,
             strategy_id=request.strategy_id,
-            trace_id=trace_id
+            trace_id=trace_id,
+            trade_date=trade_date.isoformat(),
+            sector=request.sector
         )
         order.state_history.append({"status": OrderStatus.CREATED.value, "timestamp": now_str})
+        if self.store is not None and not self.store.insert_if_new(_order_to_dict(order)):
+            # Another process won the race on this key: return its order, never execute twice.
+            persisted = self.store.get_by_key(idempotency_key)
+            existing = _order_from_dict(persisted)
+            self.orders[existing.order_id] = existing
+            self.orders_by_idempotency[idempotency_key] = existing.order_id
+            return existing
         self.orders[order_id] = order
         self.orders_by_idempotency[idempotency_key] = order_id
 
@@ -189,6 +262,7 @@ class PaperExecutionGateway:
             "total_equity": self.ledger.get_total_equity(),
             "cash": self.ledger.cash,
             "peak_equity": self.ledger.peak_equity,
+            "day_start_equity": self.ledger.equity_at_start_of(trade_date),
             "open_positions": {
                 t: {"shares": p.shares, "current_price": p.current_price, "sector": p.sector}
                 for t, p in self.ledger.open_positions.items()
@@ -218,25 +292,21 @@ class PaperExecutionGateway:
         # 4. State: SUBMITTED
         self._transition_status(order, OrderStatus.SUBMITTED)
 
-        # 5. Simulated Fill against market microstructure friction
-        gross_value = order.quantity * market_price
+        # 5. Simulated fill. Slippage is embedded in the fill price (applied once);
+        #    commission and spread are cash fees on the fill notional.
+        slip_rate = self.cost_model.slippage_rate
+        fill_price = market_price * (1.0 + slip_rate) if side == "BUY" else market_price * (1.0 - slip_rate)
+        gross_value = order.quantity * fill_price
         costs = self.cost_model.compute_trade_cost(gross_value, side=side)
 
-        order.commission = costs["commission"]
-        order.slippage = costs["slippage"]
-        order.spread = costs["spread"]
-        order.total_fees = costs["total_cost"]
-
-        # Realistic fill price incorporating slippage:
-        # BUY fills slightly higher than reference price; SELL fills slightly lower
-        slip_pct = 0.0002
-        if side == "BUY":
-            fill_price = market_price * (1.0 + slip_pct)
-        else:
-            fill_price = market_price * (1.0 - slip_pct)
         order.fill_price = fill_price
+        order.commission = costs["commission"]
+        order.spread = costs["spread"]
+        order.slippage = order.quantity * abs(fill_price - market_price)
+        order.total_fees = costs["commission"] + costs["spread"]
+        ledger_costs = {"commission": costs["commission"], "slippage": 0.0, "spread": costs["spread"]}
 
-        # 6. Atomic Portfolio Ledger Update
+        # 6. Atomic Portfolio Ledger Update (ledger validates before mutating)
         try:
             if side == "BUY":
                 self.ledger.record_buy(
@@ -244,7 +314,7 @@ class PaperExecutionGateway:
                     shares=order.quantity,
                     fill_price=fill_price,
                     trade_date=trade_date,
-                    costs=costs,
+                    costs=ledger_costs,
                     sector=request.sector,
                     trace_id=trace_id
                 )
@@ -253,8 +323,9 @@ class PaperExecutionGateway:
                     ticker=ticker,
                     fill_price=fill_price,
                     trade_date=trade_date,
-                    costs=costs,
-                    trace_id=trace_id
+                    costs=ledger_costs,
+                    trace_id=trace_id,
+                    shares=order.quantity
                 )
 
             # State: FILLED
@@ -264,11 +335,12 @@ class PaperExecutionGateway:
                 f"(Fees: {order.total_fees:.2f} USD, Trace: {trace_id})"
             )
         except Exception as e:
-            # Handle atomic rollback / rejection
+            # Ledger validates before mutating, so no balance was changed.
             logger.error(f"Execution error during ledger recording for order {order_id}: {e}")
             self._transition_status(order, OrderStatus.REJECTED, reason=f"Ledger error: {e}")
 
         return order
+
 
     def get_order(self, order_id: str) -> Optional[Order]:
         """Fetches order record by ID."""
