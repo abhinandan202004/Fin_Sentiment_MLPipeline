@@ -1,21 +1,21 @@
 # Investment Committee Debate Report: `AAPL`
-**Convened:** 2026-09-15 21:45:40 UTC  
+**Convened:** 2026-10-12 20:38:27 UTC  
 **Macro Market Regime:** `Bull`  
-**Decision Status:** **HOLD** (Allocation: **2.8%**)
+**Decision Status:** **BUY** (Allocation: **9.4%**)
 
 ---
 
 ## 1. Research Summary
 - **Asset Under Review:** `AAPL` (Technology)
-- **ML Directional Probability:** 48.4% (Optimal Conviction Hurdle: 60.0%)
+- **ML Directional Probability:** 56.0% (Optimal Conviction Hurdle: 52.0%)
 - **FinBERT News Sentiment:** +0.00
-- **Historical Analog Win Rate:** 44.0% (50 situations from 30k FAISS index)
-- **Technical RSI (14):** 50.0 | **Annual Volatility:** 25.0%
+- **Historical Analog Win Rate:** 50.0% (50 situations from 30k FAISS index)
+- **Technical RSI (14):** 40.0 | **Annual Volatility:** 25.0%
 
 ---
 
 ## 2. Evidence Quality & Prosecutor Audit
-- **Rating:** `MEDIUM` (Audit Score: **72.0 / 100**)
+- **Rating:** `HIGH` (Audit Score: **84.0 / 100**)
 - **Prosecutor Stance:** `PASS`
 - **Evidence Agreement Score:** **75%** across 4 independent evidence streams
   - **ML Model:** `NEUTRAL`
@@ -23,29 +23,23 @@
   - **Technical Setup:** `NEUTRAL`
   - **Fundamentals / Sentiment:** `NEUTRAL`
 - **Adversarial Audit Findings:**
-- Model Hurdle Failure: Calibrated ML probability (48.4%) fails to cross optimal threshold (60.0%) by 11.6%.
-- Statistical Insignificance: 95% Confidence Interval [-1.44%, +1.17%] crosses zero, confirming high tail variance.
+- Negative Asymmetry: 95% Confidence Interval [+0.00%, +0.00%] is entirely negative.
 
 ---
 
 ## 3. Bull Thesis
 - **Agent:** Bull Analyst (Historical Accuracy: 61%)
-- **Stance:** `HOLD` (Score: **40.2 / 100**, Confidence: 46%)
+- **Stance:** `HOLD` (Score: **41.8 / 100**, Confidence: 53%)
 - **Core Upside Arguments:**
-- Quantitative catalyst attributions: Positive impact from spy_return_1d (+0.002), return_5d (+0.001)
-- Sector peer momentum: +1.23% 5-day outperformance indicates institutional sector rotation
-- Volatility squeeze detected: Bollinger compression signals imminent explosive upward breakout
+- Model Conviction: ML directional probability (56.0%) clears the 52.0% threshold with constructive edge
 
 ---
 
 ## 4. Bear Thesis
 - **Agent:** Bear Analyst (Historical Accuracy: 58%)
-- **Stance:** `REDUCE` (Score: **52.7 / 100**, Confidence: 68%)
+- **Stance:** `HOLD` (Score: **34.0 / 100**, Confidence: 49%)
 - **Core Downside Vulnerabilities:**
-- Model Hurdle Failure: Calibrated probability (48.4%) fails to cross the 60.0% conviction threshold
-- Negative analog skew: Historical setups experienced a 56% failure rate across comparable market states
-- Analog tail risk: 95% Confidence Interval [-1.44%, +1.17%] crosses zero into negative return territory
-- Predictive feature drag: Quant model heavily penalized by vix_level (-0.004), spy_volatility (-0.003)
+- Analog tail risk: 95% Confidence Interval [+0.00%, +0.00%] crosses zero into negative return territory
 
 ---
 
@@ -54,30 +48,31 @@
 - **Risk Level:** `LOW` | **Veto Triggered:** `False`
 - **Position Ceiling:** 10.0%
 - **Risk Rationale:**
-
+- Asset risk profile conforms to mandate guardrails (volatility 25.0%, beta 1.08, 95% VaR 2.60%).
 
 ---
 
 ## 6. Committee Votes & Consensus Score
 | Member Agent | Stance | Score / Limit | Conviction | Historical Accuracy |
 |:-------------|:------:|:-------------:|:----------:|:-------------------:|
-| **Evidence Prosecutor** | `PASS` | 72 / 100 | 70% | 74% |
-| **Bull Analyst** | `HOLD` | 40 / 100 | 46% | 61% |
-| **Bear Analyst** | `REDUCE` | 53 / 100 | 68% | 58% |
+| **Evidence Prosecutor** | `PASS` | 84 / 100 | 85% | 74% |
+| **Bull Analyst** | `HOLD` | 42 / 100 | 53% | 61% |
+| **Bear Analyst** | `HOLD` | 34 / 100 | 49% | 58% |
 | **Risk Officer** | `BUY` | Max 10.0% | 88% | 69% |
-| **Portfolio Manager** | `REDUCE` | Target 2.8% | 41% | - |
+| **Portfolio Manager** | `BUY` | Target 9.4% | 48% | - |
 
 - **Evidence Agreement Score:** **75%**
-- **Committee Consensus Score:** **0.62 / 1.00**
-- **Calibrated Confidence:** **46%**
+- **Committee Consensus Score:** **0.75 / 1.00**
+- **Calibrated Confidence:** **60%**
 
 ---
 
 ## 7. Recommended Allocation (Portfolio Manager)
-- **Proposed Action:** `REDUCE`
-- **Target Capital Allocation:** **2.8%**
+- **Proposed Action:** `BUY`
+- **Target Capital Allocation:** **9.4%**
 - **Sizing Rationale:**
-  - Target allocation 2.8% requires trimming current position by 2.2%
+  - Half-Kelly model and debate spread indicate 9.4% target allocation (+4.4% expansion)
+  - Fully compliant with Risk Officer ceiling of 10.0%
 
 ---
 
@@ -90,13 +85,13 @@
 ---
 
 ## 9. Chief Investment Officer (CIO) Verdict
-- **Authoritative Decision:** **`HOLD`**
+- **Authoritative Decision:** **`BUY`**
 - **Governance Resolution:** **Explainable Rule-Based Governance Hierarchy**
-  - Model Conviction Check: 48.4% vs 60.0% Hurdle (BELOW THRESHOLD)
-  - Historical Analog Win Rate: 44.0% (50 matched cases from 30,025 FAISS index)
+  - Model Conviction Check: 56.0% vs 52.0% Hurdle (CLEARED)
+  - Historical Analog Win Rate: 50.0% (50 matched cases from 30,025 FAISS index)
   - Cross-Stream Evidence Agreement: 75%
   - Risk Officer Posture: `LOW` (Veto Enforced: False)
-- **Final Target Allocation:** **2.8%**
+- **Final Target Allocation:** **9.4%**
 
 ### Executive Rationale:
-> CIO VERDICT: MAINTAIN HOLD. Neutral equilibrium: Model probability (48.4%) and analog win rate (44%) present balanced risk-reward without directional edge. Preserving existing allocation (2.8%) with balanced risk-reward.
+> CIO VERDICT: BUY APPROVED with 60% calibrated confidence. Committee resolved in favor of capital deployment (9.4% allocation). Primary thesis: Model Conviction: ML directional probability (56.0%) clears the 52.0% threshold with constructive edge. Risk score is acceptable (20/100) with 75% cross-stream agreement.

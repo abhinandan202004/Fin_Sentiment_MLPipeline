@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fin Sentiment // Autonomous Trading Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+  <!-- TOP BAR NAVIGATION -->
+  <header class="top-nav">
+    <div class="nav-left">
+      <div class="brand-mark">
+        <span class="brand-symbol">◈</span>
+        <span class="brand-title">FIN_SENTIMENT</span>
+        <span class="brand-sub">QUANT COMMAND</span>
+      </div>
+      <div class="trading-mode-pill" id="tradingModeBadge">
+        <span class="pulsing-dot"></span>
+        <span id="modeText">PAPER_TRADING_ONLY</span>
+      </div>
+    </div>
+
+    <!-- Center Floating Pill Tabs -->
+    <nav class="nav-center-pill">
+      <button class="pill-btn active" data-tab="overview" id="navTabOverview">Overview</button>
+      <button class="pill-btn" data-tab="orders" id="navTabOrders">Orders &amp; Fills</button>
+      <button class="pill-btn" data-tab="opportunities" id="navTabOpps">Opportunities</button>
+      <button class="pill-btn" data-tab="committee" id="navTabCommittee">Committee</button>
+      <button class="pill-btn" data-tab="risk" id="navTabRisk">Risk Guard</button>
+    </nav>
+
+    <div class="nav-right">
+      <div class="system-health-pill" id="systemHealthBadge" title="Click to view readiness">
+        <span class="indicator-dot"></span>
+        <span id="healthText">SYSTEM: HEALTHY</span>
+      </div>
+      <button class="action-btn kill-btn" id="killSwitchBtn">
+        <span class="btn-icon">⚠</span>
+        <span id="killBtnLabel">KILL SWITCH</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWPORT -->
+  <main class="main-viewport">
+
+    <!-- HERO KPI ROW -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">TOTAL PAPER EQUITY</div>
+        <div class="kpi-value" id="kpiTotalEquity">$12,000.00</div>
+        <div class="kpi-meta" id="kpiEquityDelta">Reconciled Cash: <span id="kpiCash">$12,000.00</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">CAPITAL UTILIZATION</div>
+        <div class="kpi-value" id="kpiCapitalExposure">0.0%</div>
+        <div class="kpi-meta">Hard Limit: <span class="accent-val">85.0% Aggregate</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">PORTFOLIO DRAWDOWN</div>
+        <div class="kpi-value" id="kpiDrawdown">0.00%</div>
+        <div class="kpi-meta">Daily Stop: <span class="accent-val">5.0% Stop-Loss Gate</span></div>
+      </div>
+      <div class="kpi-card highlight-card">
+        <div class="kpi-label">BENCHMARK (SPY) ALPHA</div>
+        <div class="kpi-value lime-val" id="kpiExcessReturn">+0.00%</div>
+        <div class="kpi-meta" id="kpiBenchmarkStatus">SHA-256 Verified Series</div>
+      </div>
+    </section>
+
+    <!-- TAB 1: OVERVIEW (DUAL-CONTRAST SPLIT LAYOUT) -->
+    <section class="tab-content active" id="tab-overview">
+      <div class="split-layout">
+        <!-- LEFT PANEL: Mint Sage Light Container (#DAF1DE) -->
+        <div class="split-left-panel">
+          <div class="panel-header-light">
+            <div class="header-titles">
+              <span class="tag-capsule">MULTI-AGENT PIPELINE</span>
+              <h2 class="display-title-dark">Active Candidate Review</h2>
+            </div>
+            <div class="header-actions">
+              <span class="pill-counter" id="cycleStatusPill">Cycle: Ready</span>
+            </div>
+          </div>
+
+          <p class="panel-intro-text">
+            Autonomous daily screened opportunities across the 25-ticker universe, passed through dialectical multi-agent committee scrutiny and central RiskGuard pre-trade checks.
+          </p>
+
+          <!-- Candidate List in Mint Container -->
+          <div class="candidate-list" id="overviewCandidateList">
+            <div class="candidate-row empty-state">
+              <span class="empty-icon">⏳</span>
+              <div>No cycle executed yet. Click "Run Autonomous Cycle" to screen the universe.</div>
+            </div>
+          </div>
+
+          <div class="panel-footer-light">
+            <div class="summary-stat">
+              <span class="stat-lbl">SCREENED UNIVERSE</span>
+              <span class="stat-num" id="overviewScreenedCount">25 Tickers</span>
+            </div>
+            <div class="summary-stat">
+              <span class="stat-lbl">PASSED COMMITTEE</span>
+              <span class="stat-num" id="overviewCommitteePassedCount">0 Candidates</span>
+            </div>
+            <div class="summary-stat">
+              <span class="stat-lbl">EXECUTION ORDERS</span>
+              <span class="stat-num" id="overviewOrdersPlacedCount">0 Placed</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT PANEL: Obsidian Slate Dark Chamber (#051F20) -->
+        <div class="split-right-panel">
+          <div class="chamber-header">
+            <div class="chamber-badge">
+              <span class="dot-live"></span>
+              <span>TACTICAL CONTROLLER</span>
+            </div>
+            <span class="trace-badge" id="overviewCycleId">CYCLE: IDLE</span>
+          </div>
+
+          <div class="selected-details" id="overviewSelectedDetails">
+            <div class="ticker-hero-row">
+              <div class="ticker-box">
+                <span class="ticker-name" id="selectedTickerSymbol">AUTO RUNNER</span>
+                <span class="ticker-sector" id="selectedTickerSector">Daily Trading Cycle</span>
+              </div>
+              <div class="ticker-price-box">
+                <span class="sub-price-lbl">SIMULATED EXECUTION</span>
+                <span class="primary-price" id="selectedTickerPrice">DURABLE IDEMPOTENCY</span>
+              </div>
+            </div>
+
+            <!-- Metric Grid -->
+            <div class="chamber-metric-grid">
+              <div class="sub-metric-card">
+                <span class="sm-lbl">ML DIRECTIONAL PROB</span>
+                <span class="sm-val" id="selectedMlProb">52.0% Hurdle</span>
+              </div>
+              <div class="sub-metric-card">
+                <span class="sm-lbl">OPPORTUNITY SCORE</span>
+                <span class="sm-val" id="selectedOppScore">-- / 100</span>
+              </div>
+              <div class="sub-metric-card">
+                <span class="sm-lbl">RISK OFFICER VETO</span>
+                <span class="sm-val" id="selectedRiskVeto">PASS</span>
+              </div>
+              <div class="sub-metric-card">
+                <span class="sm-lbl">CASH RECONCILIATION</span>
+                <span class="sm-val lime-text" id="selectedReconcile">&Delta; &lt; 10⁻⁶ USD</span>
+              </div>
+            </div>
+
+            <!-- Committee Deliberation Snapshot -->
+            <div class="deliberation-box">
+              <div class="delib-title">CIO DIALECTICAL VERDICT &amp; RATIONALE</div>
+              <div class="delib-quote" id="selectedCioRationale">
+                "Autonomous pipeline triggers end-to-end data validation, multi-factor ranking, adversarial agent debate, and risk-checked paper execution."
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons in Chamber -->
+          <div class="chamber-action-footer">
+            <button class="cta-lime-btn" id="runCycleBtn">
+              <span class="btn-text">RUN AUTONOMOUS CYCLE</span>
+              <span class="btn-arrow">→</span>
+            </button>
+            <button class="secondary-slate-btn" id="viewAllOrdersBtn">
+              <span>VIEW ORDER LOGS</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance & Benchmark Section -->
+      <div class="overview-benchmark-strip">
+        <div class="strip-header">
+          <div class="strip-title">BENCHMARK AUDIT (SPY TRACKING &amp; EQUITY CURVE)</div>
+          <div class="strip-meta">Coverage: Canonical Verified Sidecar &bull; Out-of-Sample Evaluation</div>
+        </div>
+        <div class="benchmark-stats-row" id="benchmarkMetricsRow">
+          <div class="bm-stat"><span class="bm-lbl">PORTFOLIO RETURN:</span> <span class="bm-val" id="bmPortReturn">0.00%</span></div>
+          <div class="bm-stat"><span class="bm-lbl">SPY BENCHMARK RETURN:</span> <span class="bm-val" id="bmSpyReturn">0.00%</span></div>
+          <div class="bm-stat"><span class="bm-lbl">EXCESS RETURN (ALPHA):</span> <span class="bm-val lime-text" id="bmExcessReturn">0.00%</span></div>
+          <div class="bm-stat"><span class="bm-lbl">MAX DRAWDOWN:</span> <span class="bm-val" id="bmMaxDd">0.00%</span></div>
+          <div class="bm-stat"><span class="bm-lbl">WIN RATE:</span> <span class="bm-val" id="bmWinRate">--%</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: ORDERS & FILLS -->
+    <section class="tab-content" id="tab-orders">
+      <div class="section-card">
+        <div class="table-toolbar">
+          <div class="toolbar-title">
+            <h3>DURABLE PAPER EXECUTION ORDER STORE</h3>
+            <span class="count-badge" id="orderCountBadge">0 Orders</span>
+          </div>
+          <div class="toolbar-filters">
+            <select id="orderStatusFilter" class="custom-select">
+              <option value="">All Statuses</option>
+              <option value="FILLED">FILLED</option>
+              <option value="REJECTED">REJECTED</option>
+              <option value="PENDING">PENDING</option>
+            </select>
+            <input type="text" id="orderSearchInput" class="custom-input" placeholder="Search by ticker or trace ID...">
+            <button class="secondary-slate-btn sm-btn" id="refreshOrdersBtn">↻ Refresh</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="quant-table" id="ordersTable">
+            <thead>
+              <tr>
+                <th>ORDER ID</th>
+                <th>TRADE DATE</th>
+                <th>TICKER</th>
+                <th>SIDE</th>
+                <th>QTY</th>
+                <th>FILL PRICE</th>
+                <th>FEES</th>
+                <th>TOTAL NOTIONAL</th>
+                <th>STATUS</th>
+                <th>TRACE ID</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+              <tr>
+                <td colspan="11" class="text-center py-4 text-muted">No orders recorded in paper store.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: OPPORTUNITIES SCANNER -->
+    <section class="tab-content" id="tab-opportunities">
+      <div class="section-card">
+        <div class="table-toolbar">
+          <div class="toolbar-title">
+            <h3>25-TICKER UNIVERSE SCREENING &amp; MULTI-FACTOR RANKING</h3>
+            <span class="count-badge" id="oppCountBadge">25 Screened</span>
+          </div>
+          <div class="toolbar-filters">
+            <button class="cta-lime-btn sm-btn" id="rescreenOppsBtn">⚡ Re-Scan Universe</button>
+          </div>
+        </div>
+
+        <div class="cards-grid" id="opportunitiesGrid">
+          <!-- Dynamically populated candidate cards -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: COMMITTEE CHAMBER -->
+    <section class="tab-content" id="tab-committee">
+      <div class="section-card">
+        <div class="chamber-intro">
+          <h3>DIALECTICAL MULTI-AGENT INVESTMENT COMMITTEE</h3>
+          <p>
+            Autonomous adversarial evaluation simulating an institutional investment committee:
+            <strong>Bull Analyst</strong> (growth catalyst), <strong>Bear Analyst</strong> (downside vectors),
+            <strong>Evidence Prosecutor</strong> (claims falsification &amp; lookahead audits),
+            <strong>Risk Officer</strong> (hard portfolio gates &amp; veto authority), and
+            <strong>CIO</strong> (final synthetic conviction verdict).
+          </p>
+        </div>
+
+        <div class="committee-grid" id="committeeGrid">
+          <!-- Dynamically populated committee cards -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: RISK GUARD & OPS -->
+    <section class="tab-content" id="tab-risk">
+      <div class="risk-dashboard-grid">
+        <div class="risk-panel-box">
+          <div class="panel-box-header">CENTRAL RISK GUARD LIMIT MONITOR</div>
+          <div class="risk-metrics-list">
+            <div class="risk-item">
+              <div class="ri-info">
+                <span class="ri-title">Max Daily Loss Gate (5.0%)</span>
+                <span class="ri-desc">Halts all new BUY submissions when daily loss reaches 5%. SELL exits always permitted.</span>
+              </div>
+              <span class="status-pill status-pass" id="riskDailyLossPill">ACTIVE (0.0% / 5.0%)</span>
+            </div>
+            <div class="risk-item">
+              <div class="ri-info">
+                <span class="ri-title">Aggregate Capital Exposure Limit (85.0%)</span>
+                <span class="ri-desc">Restricts non-cash deployment to prevent liquidity crunch and catastrophic margin depletion.</span>
+              </div>
+              <span class="status-pill status-pass" id="riskExposurePill">SAFE (0.0% / 85.0%)</span>
+            </div>
+            <div class="risk-item">
+              <div class="ri-info">
+                <span class="ri-title">Sector Concentration Cap (35.0%)</span>
+                <span class="ri-desc">Enforces multi-sector diversification across Technology, Financials, Energy, and Healthcare.</span>
+              </div>
+              <span class="status-pill status-pass" id="riskSectorPill">PASS</span>
+            </div>
+            <div class="risk-item">
+              <div class="ri-info">
+                <span class="ri-title">Double-Entry Cash Reconciliation</span>
+                <span class="ri-desc">Strict invariant verification checking cash ledger against transaction costs and fills.</span>
+              </div>
+              <span class="status-pill status-pass" id="riskReconcilePill">&Delta; &lt; 10⁻⁶ USD</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="risk-panel-box">
+          <div class="panel-box-header">EMERGENCY KILL SWITCH CONTROL</div>
+          <div class="kill-switch-chamber">
+            <div class="ks-status-indicator" id="ksChamberStatus">
+              <span class="status-big-dot"></span>
+              <div>
+                <div class="ks-stat-title" id="ksChamberTitle">SYSTEM OPERATIONAL</div>
+                <div class="ks-stat-subtitle" id="ksChamberSubtitle">Paper trading active &bull; Orders permitted</div>
+              </div>
+            </div>
+
+            <div class="ks-controls-form">
+              <label class="form-label" for="adminTokenInput">ADMIN AUTHENTICATION TOKEN (TRADING_ADMIN_TOKEN)</label>
+              <input type="password" id="adminTokenInput" class="custom-input w-full" placeholder="Enter admin authorization token...">
+
+              <label class="form-label mt-3" for="ksReasonInput">OPERATION RATIONALE / EVENT REASON</label>
+              <input type="text" id="ksReasonInput" class="custom-input w-full" placeholder="e.g. Market volatility drill / Maintenance">
+
+              <div class="ks-btn-group mt-4">
+                <button class="action-btn kill-btn" id="activateKillBtn">ACTIVATE KILL SWITCH</button>
+                <button class="action-btn reactivate-btn" id="deactivateKillBtn">DEACTIVATE &amp; RESUME</button>
+              </div>
+            </div>
+
+            <div class="audit-history-box mt-4">
+              <div class="audit-hist-title">AUDIT TRAIL LOG</div>
+              <div class="audit-trail-list" id="killSwitchAuditList">
+                <div class="audit-entry empty">No kill switch events recorded.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ORDER TRACE AUDIT VIEWER -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h4 id="modalOrderTitle">ORDER AUDIT TRACE</h4>
+        <button class="close-modal-btn" id="closeOrderModalBtn">&times;</button>
+      </div>
+      <div class="modal-body" id="modalOrderBody">
+        <!-- Filled dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+{
+  "cycle_id": "e4601d45-7e05-4504-9bac-fdf579e88d2c",
+  "trade_date": "2026-10-17",
+  "timestamp": "2026-10-17T11:58:57.579933+00:00",
+  "universe_size": 25,
+  "opportunities_screened": 25,
+  "candidates_reviewed": 5,
+  "committee_debates": [
+    {
+      "ticker": "ORCL",
+      "decision": "BUY",
+      "cio_rationale": "CIO VERDICT: BUY APPROVED with 60% calibrated confidence. Committee resolved in favor of capital deployment (9.4% allocation). Primary thesis: Model Conviction: ML directional probability (56.0%) clears the 52.0% threshold with constructive edge. Risk score is acceptable (20/100) with 75% cross-stream agreement.",
+      "risk_veto": false,
+      "prosecutor_flaws": 0
+    },
+    {
+      "ticker": "INTC",
+      "decision": "BUY",
+      "cio_rationale": "CIO VERDICT: BUY APPROVED with 60% calibrated confidence. Committee resolved in favor of capital deployment (9.4% allocation). Primary thesis: Model Conviction: ML directional probability (56.0%) clears the 52.0% threshold with constructive edge. Risk score is acceptable (20/100) with 75% cross-stream agreement.",
+      "risk_veto": false,
+      "prosecutor_flaws": 0
+    },
+    {
+      "ticker": "META",
+      "decision": "BUY",
+      "cio_rationale": "CIO VERDICT: BUY APPROVED with 60% calibrated confidence. Committee resolved in favor of capital deployment (9.4% allocation). Primary thesis: Model Conviction: ML directional probability (56.0%) clears the 52.0% threshold with constructive edge. Risk score is acceptable (20/100) with 75% cross-stream agreement.",
+      "risk_veto": false,
+      "prosecutor_flaws": 0
+    },
+    {
+      "ticker": "AMD",
+      "decision": "BUY",
+      "cio_rationale": "CIO VERDICT: BUY APPROVED with 60% calibrated confidence. Committee resolved in favor of capital deployment (9.4% allocation). Primary thesis: Model Conviction: ML directional probability (56.0%) clears the 52.0% threshold with constructive edge. Risk score is acceptable (20/100) with 75% cross-stream agreement.",
+      "risk_veto": false,
+      "prosecutor_flaws": 0
+    },
+    {
+      "ticker": "MSFT",
+      "decision": "BUY",
+      "cio_rationale": "CIO VERDICT: BUY APPROVED with 60% calibrated confidence. Committee resolved in favor of capital deployment (9.4% allocation). Primary thesis: Model Conviction: ML directional probability (56.0%) clears the 52.0% threshold with constructive edge. Risk score is acceptable (20/100) with 75% cross-stream agreement.",
+      "risk_veto": false,
+      "prosecutor_flaws": 0
+    }
+  ],
+  "orders_submitted": [
+    "f519b2cd-6999-4f27-8e57-7a93adaf882c",
+    "68c6618c-ecaa-4f3c-9972-3318519ed73a",
+    "e8e375f0-39ee-4252-968f-8f8c3e9cda15"
+  ],
+  "orders_filled": [
+    {
+      "order_id": "f519b2cd-6999-4f27-8e57-7a93adaf882c",
+      "ticker": "ORCL",
+      "quantity": 8.523326563214628,
+      "fill_price": 140.81825811767578,
+      "fees": 0.9601919999999997
+    },
+    {
+      "order_id": "68c6618c-ecaa-4f3c-9972-3318519ed73a",
+      "ticker": "INTC",
+      "quantity": 12.350952224537583,
+      "fill_price": 97.177932371521,
+      "fees": 0.9601919999999999
+    },
+    {
+      "order_id": "e8e375f0-39ee-4252-968f-8f8c3e9cda15",
+      "ticker": "META",
+      "quantity": 1.7858205261634315,
+      "fill_price": 672.0944139770507,
+      "fees": 0.9601919999999997
+    }
+  ],
+  "orders_rejected": [],
+  "positions_closed": [],
+  "portfolio_before": {
+    "currency": "USD",
+    "total_equity": 12000.0,
+    "cash": 12000.0,
+    "positions_value": 0,
+    "open_positions_count": 0,
+    "closed_trades_count": 0,
+    "peak_equity": 12000.0,
+    "kill_switch_active": false
+  },
+  "portfolio_after": {
+    "currency": "USD",
+    "total_equity": 11996.399424,
+    "cash": 8396.399424,
+    "positions_value": 3600.0,
+    "open_positions_count": 3,
+    "closed_trades_count": 0,
+    "peak_equity": 12000.0,
+    "kill_switch_active": false,
+    "ledger_reconciled": true,
+    "reconcile_delta": 0.0
+  },
+  "status": "COMPLETED",
+  "top_opportunities": [
+    {
+      "ticker": "ORCL",
+      "score": 62.1,
+      "price": 140.79,
+      "sector": "Technology"
+    },
+    {
+      "ticker": "INTC",
+      "score": 62.0,
+      "price": 97.16,
+      "sector": "Technology"
+    },
+    {
+      "ticker": "META",
+      "score": 61.9,
+      "price": 671.96,
+      "sector": "Technology"
+    },
+    {
+      "ticker": "AMD",
+      "score": 61.7,
+      "price": 503.44,
+      "sector": "Technology"
+    },
+    {
+      "ticker": "MSFT",
+      "score": 61.6,
+      "price": 496.64,
+      "sector": "Technology"
+    }
+  ]
+}

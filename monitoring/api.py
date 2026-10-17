@@ -118,7 +118,39 @@ def route(ctx: ApiContext, method: str, path: str, headers: Dict[str, str],
             if not ctx.benchmark_report.exists():
                 return 404, {"status": "BLOCKED", "reason": "no benchmark report generated"}
             return 200, json.loads(ctx.benchmark_report.read_text(encoding="utf-8"))
+        if path == "/api/pipeline/summary":
+            summary_file = Path(__file__).resolve().parent.parent / "data" / "pipeline_summary.json"
+            if summary_file.exists():
+                try:
+                    return 200, json.loads(summary_file.read_text(encoding="utf-8"))
+                except Exception as e:
+                    return 500, {"error": f"failed to load summary: {e}"}
+            return 200, {
+                "cycle_id": "NO_CYCLE_RUN_YET",
+                "timestamp": None,
+                "opportunities_screened": 0,
+                "candidates_reviewed": 0,
+                "orders_submitted": [],
+                "orders_filled": [],
+                "orders_rejected": [],
+                "positions_closed": [],
+                "top_opportunities": [],
+                "committee_debates": []
+            }
         return 404, {"error": "not found"}
+
+    if method == "POST" and path == "/api/pipeline/run-cycle":
+        denied = _authorized(ctx, headers)
+        if denied:
+            return denied
+        try:
+            from execution.pipeline_runner import TradingPipelineRunner
+            runner = TradingPipelineRunner()
+            summary = runner.run_cycle()
+            return 200, summary
+        except Exception as exc:
+            logger.exception("Failed to run trading cycle via API")
+            return 500, {"error": "cycle execution failed", "details": str(exc)}
 
     if method == "POST" and path in ("/trading/kill-switch/activate", "/trading/kill-switch/reactivate"):
         denied = _authorized(ctx, headers)
@@ -188,7 +220,50 @@ def make_handler(ctx: ApiContext):
             self.end_headers()
             self.wfile.write(data)
 
+        def _serve_static(self, rel_path: str):
+            web_dir = Path(__file__).resolve().parent.parent / "web"
+            file_path = (web_dir / rel_path).resolve()
+            # Ensure path does not escape web_dir
+            if not str(file_path).startswith(str(web_dir.resolve())):
+                self.send_response(403)
+                self.end_headers()
+                return
+            if not file_path.is_file():
+                self.send_response(404)
+                self.end_headers()
+                return
+            ext = file_path.suffix.lower()
+            content_types = {
+                ".html": "text/html; charset=utf-8",
+                ".css": "text/css; charset=utf-8",
+                ".js": "application/javascript; charset=utf-8",
+                ".json": "application/json; charset=utf-8",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".svg": "image/svg+xml",
+                ".ico": "image/x-icon",
+                ".woff2": "font/woff2",
+                ".woff": "font/woff"
+            }
+            ctype = content_types.get(ext, "application/octet-stream")
+            content = file_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+
         def do_GET(self):
+            from urllib.parse import urlsplit
+            parts = urlsplit(self.path)
+            if parts.path in ("/", "/index.html"):
+                self._serve_static("index.html")
+                return
+            if parts.path.startswith("/static/"):
+                rel = parts.path[len("/static/"):]
+                self._serve_static(f"static/{rel}")
+                return
             self._serve("GET")
 
         def do_POST(self):
